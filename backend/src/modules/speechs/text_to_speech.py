@@ -2,7 +2,7 @@ from elevenlabs import ElevenLabs, Voice, VoiceSettings
 import os
 from typing_extensions import Optional
 
-from backend.src import settings
+from backend.src.settings import settings
 
 
 class TextToSpeech:
@@ -11,12 +11,11 @@ class TextToSpeech:
     def __init__(self):
         self._client: Optional[ElevenLabs] = None
 
-
     @property
     def client(self) -> ElevenLabs:
         """Get or create ElevenLabs client instance using singleton pattern."""
         if self._client is None:
-            self._client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
+            self._client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
         return self._client
 
     async def synthesize(self, text: str) -> bytes:
@@ -42,10 +41,10 @@ class TextToSpeech:
             audio_generator = self.client.generate(
                 text=text,
                 voice=Voice(
-                    voice_id=settings.ELEVENLABS_VOICE_ID,
+                    voice_id=os.getenv("ELEVENLABS_VOICE_ID"),
                     settings=VoiceSettings(stability=0.5, similarity_boost=0.5),
                 ),
-                model=settings.TTS_MODEL_NAME,
+                model=os.getenv("TTS_MODEL_NAME"),
             )
 
             # Convert generator to bytes

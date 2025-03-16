@@ -1,8 +1,10 @@
+import os
+
 from langchain_core.messages import HumanMessage, RemoveMessage
 
 from backend.src.graph_state import AIAgentState
 from backend.src.utils.chains import get_chat_model
-from backend.src import settings
+from backend.src.settings import settings
 
 
 async def summarize_conversation_node(state: AIAgentState):
@@ -26,6 +28,6 @@ async def summarize_conversation_node(state: AIAgentState):
 
     delete_messages = [
         RemoveMessage(id=m.id)
-        for m in state["messages"][: -settings.TOTAL_MESSAGES_AFTER_SUMMARY]
+        for m in state["messages"][: - int(os.getenv("TOTAL_MESSAGES_AFTER_SUMMARY"))]
     ]
     return {"summary": response.content, "messages": delete_messages}

@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from datetime import datetime
 from typing_extensions import List, Optional
@@ -9,25 +10,25 @@ from pydantic import BaseModel, Field
 
 from backend.src.core.prompts import MEMORY_ANALYSIS_PROMPT
 from backend.src.modules.memory.long_term.vector_store import get_vector_store
-from backend.src import settings
 
 
 class MemoryAnalysis(BaseModel):
     """Result of analyzing a message for memory-worthy content."""
-    is_important: str = Field(..., description="Whether the message is important enough to be stored as a memory")
-    formatted_query: str = Field(..., description="The formatted memory to be stored")
+    is_important: bool = (
+        Field(..., description="Whether the message is important enough to be stored as a memory"))
+    formatted_memory: Optional[str] = Field(..., description="The formatted memory to be stored")
 
 
 class MemoryManager:
     def __init__(self):
-        self.llm = ChatGroq(name=settings.SMALL_TEXT_MODEL_NAME,
+        self.llm = ChatGroq(name=os.getenv("SMALL_TEXT_MODEL_NAME"),
                             temperature=0.2, max_retries=2).with_structured_output(MemoryAnalysis)
         self.logger = logging.getLogger(__name__)
         self.vector_store = get_vector_store()
 
     async def analyze_information(self, message: BaseMessage):
         """Analyze the information & important if needed."""
-        prompt = MEMORY_ANALYSIS_PROMPT.format(message)
+        prompt = MEMORY_ANALYSIS_PROMPT.format(message=message.content)
         return await self.llm.ainvoke(input=prompt)
 
     async def extract_store_information(self, message: BaseMessage):
@@ -35,9 +36,9 @@ class MemoryManager:
             return
 
         analysis = await self.analyze_information(message=message)
-        if analysis.is_important and analysis.formatted_query:
+        if analysis.is_important and analysis.formatted_memory:
             # check the similar message exists or not
-            result = self.vector_store.find_similar_memories(analysis.formatted_query)
+            result = self.vector_store.find_similar_memories(analysis.formatted_memory)
             if result:
                 # Skip storage if we already have a similar memory
                 self.logger.info(

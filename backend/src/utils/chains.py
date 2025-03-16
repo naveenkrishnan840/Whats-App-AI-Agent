@@ -1,3 +1,5 @@
+import os
+
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -5,7 +7,7 @@ from langchain_core.output_parsers import StrOutputParser
 import re
 
 from backend.src.core.prompts import CHARACTER_CARD_PROMPT, ROUTER_PROMPT
-from backend.src import settings
+from backend.src.settings import settings
 
 
 def remove_asterisk_content(text: str) -> str:
@@ -26,8 +28,7 @@ class RouterResponse(BaseModel):
 
 def get_chat_model(temperature: float = 0.7):
     return ChatGroq(
-        api_key=settings.GROQ_API_KEY,
-        model_name=settings.TEXT_MODEL_NAME,
+        model=os.getenv("TEXT_MODEL_NAME"),
         temperature=temperature,
     )
 

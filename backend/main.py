@@ -1,9 +1,11 @@
 import os
 from io import BytesIO
-
-from fastapi import FastAPI, APIRouter, Request, Response
+import base64
+import sqlite3
+from datetime import datetime
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing_extensions import Dict
+from dotenv import load_dotenv
 import httpx
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.checkpoint.duckdb.aio import AsyncDuckDBSaver
@@ -12,182 +14,145 @@ from logging import getLogger
 
 from backend.src.modules.speechs.speech_to_text import SpeechToText
 from backend.src.modules.image.image_to_text import ImageToText
-from backend.src import settings
-from backend.src.build_graph import build_graph
+from backend.src.settings import settings
+from backend.src import graph_builder
+from backend.src.request_validate import SignUpLogin, ChatInput
 
 app = FastAPI(title="What's App AI Agent")
 
 logger = getLogger(__name__)
-# app.add_middleware()
 
 api_router = APIRouter()
 
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
-WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+database = "backend/chat_message.db"
 
-
+load_dotenv()
 # Declare the Global Instance
 speech_to_text = SpeechToText()
 image_to_text = ImageToText()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@api_router.api_route(path="/whatapp-response", methods=["GET", "POST"])
-async def whatapp_handler(request: Request) -> Response:
-    """Handles incoming messages and status updates from the WhatsApp Cloud API."""
-    if request.method == "GET":
-        params = request.query_params
-        if params.get("hub.verify_token") == os.getenv("WHATSAPP_VERIFY_TOKEN"):
-            return Response(content=params.get("hub.challenge"), status_code=200)
-        return Response(content="Verification token mismatch", status_code=403)
 
-    try:
-        data = await request.json()
-        change_value = data["entry"][0]["changes"][0]["value"]
-        if "messages" in change_value:
-            message = change_value["messages"][0]
-            from_number = message["from"]
-            session_id = from_number
+@api_router.post("/signup-login")
+def signup_login(request: Request, request_data: SignUpLogin):
+    name = request_data.name
+    phone_no = request_data.phone_no
 
-            # Get user message and handle different message types
-            content = ""
-            if message["type"] == "audio":
-                content = await process_audio_message(message)
-            # Get image caption if any
-            elif message["type"] == "image":
-                content = message.get("image", {}).get("caption", "")
-                # Download image for your request message content
-                image_bytes = await download_media(message["image"]["id"])
-                try:
-                    description = await image_to_text.analyze_image(
-                        image_data=image_bytes,
-                        prompt="Please describe what you see in this image in the context of our conversation.")
-                    content += f"\n[Image Analysis: {description}]"
-                except Exception as e:
-                    raise e
-            else:
-                content = message["text"]["body"]
-            with AsyncSqliteSaver.from_conn_string(conn_string=settings.SHORT_TERM_MEMORY_DB_PATH) as checkpointer:
-                graph = build_graph.compile(checkpointer=checkpointer)
-                await graph.ainvoke(input={
-                    "messages": HumanMessage(content=content)},
-                    config={"configurable": {"thread_id": session_id}})
-
-                # Get the workflow type and response from the state
-                output_state = await graph.aget_state(config={"configurable": {"thread_id": session_id}})
-
-                workflow = output_state.values.get("workflow", "conversation")
-                response_message = output_state.values["messages"][-1].content
-
-                if workflow == "audio":
-                    audio_buffer = output_state.values.get("audio_buffer")
-                    success = await send_response()
-        elif "statuses" in change_value:
-            return Response(content="Status update received", status_code=200)
+    with sqlite3.connect(database=database) as conn:
+        cursor = conn.cursor()
+        user_det = cursor.execute(f"select * from user_login where name='{name}' and phone_no='{phone_no}'").fetchone()
+        if not user_det:
+            user_id = cursor.execute(f"insert into user_login (name, phone_no) values('{name}', '{phone_no}')").\
+                lastrowid
+            conn.commit()
+            request.app.user_id = user_id
         else:
-            return Response(content="unknown event type", status_code=400)
+            request.app.user_id = user_det[0]
+        return HTTPException(detail={"status": "login success", "user": user_det}, status_code=200)
+
+
+@api_router.post(path="/get-chat-message")
+def get_chat_messages(request: Request):
+    with sqlite3.connect(database=database) as conn:
+        cursor = conn.cursor()
+        chat_messages = cursor.execute(f"select * from whatapp_chat_message where user_id={request.app.user_id} "
+                                       f"order by chat_time").fetchall()
+        # chat_messages = cursor.execute(f"select * from whatapp_chat_message where user_id=1 order by chat_time").\
+        #     fetchall()
+        return HTTPException(detail=chat_messages, status_code=200)
+
+
+@api_router.post(path="/whatapp-request")
+async def whatapp_handler(request: Request, chat_input: ChatInput):
+    """Handles incoming messages and status updates from the WhatsApp Cloud API."""
+    try:
+        # Get user message and handle different message types
+        message = chat_input
+        content = ""
+        with sqlite3.connect(database=database) as conn:
+            cursor = conn.cursor()
+            user_id = request.app.user_id
+            user_det = cursor.execute(f"select * from user_login where user_id={user_id}").fetchall()
+            # user_det = cursor.execute("select * from user_login where user_id=1").fetchall()
+            session_id = "-".join([str(i) for i in user_det[0]])
+            cursor.execute(f'insert into whatapp_chat_message (blob_data, text_data, chat_type, msg_type, chat_time, '
+                           f'user_id) '
+                           f'values("{message.user_text_input if message.chat_type in ["audio", "image"] else ""}", '
+                           f'{message.user_text_input if message.chat_type == "text" else ""}, '
+                           f'"User", "{message.chat_type}", "{datetime.now()}", '
+                           f'"{1}")')
+        if message.chat_type == "audio":
+            content = await process_audio_message(message.user_text_input)
+        # Get image caption if any
+        elif message.chat_type == "image":
+            image_bytes = message.user_text_input
+            try:
+                description = await image_to_text.analyze_image(
+                    image_data=image_bytes,
+                    prompt="Please describe what you see in this image in the context of our conversation.")
+                content += f"\n[Image Analysis: {description}]"
+            except Exception as e:
+                raise e
+        else:
+            content = message.user_text_input
+        async with AsyncSqliteSaver.from_conn_string(conn_string=os.getenv("SHORT_TERM_MEMORY_DB_PATH")) as checkpointer:
+            graph = graph_builder.compile(checkpointer=checkpointer)
+            await graph.ainvoke(input={
+                "messages": HumanMessage(content=content)},
+                config={"configurable": {"thread_id": session_id}})
+
+            # Get the workflow type and response from the state
+            output_state = await graph.aget_state(config={"configurable": {"thread_id": session_id}})
+
+            workflow = output_state.values.get("workflow", "")
+            response_message = output_state.values["messages"][-1].content
+            audio_buffer = output_state.values.get("audio_buffer", "")
+            image_path = output_state.values.get("image_path", "")
+            byts_str_data = ""
+            chat_type = "text"
+            if image_path and workflow == "image":
+                with open(file=image_path, mode="rb") as image:
+                    base64_str = base64.b64encode(image.read()).decode("utf-8")
+                    byts_str_data = f"data:image/png;base64,{base64_str}"
+                chat_type = workflow
+            if audio_buffer and workflow == "audio":
+                base64_str = base64.b64encode(audio_buffer).decode("utf-8")
+                byts_str_data = f"data:audio/webm;codecs=opus;base64,{base64_str}"
+                chat_type = workflow
+            with sqlite3.connect(database=database) as conn:
+                cursor = conn.cursor()
+                cursor.execute(f'insert into whatapp_chat_message (blob_data, text_data, chat_type, msg_type, '
+                               f'chat_time, user_id) values("{byts_str_data}", {response_message}, "Bot", '
+                               f'"{chat_type}", "{datetime.now()}", "{1}")')
+            return HTTPException(detail={"message": response_message, "bytes_data": byts_str_data,
+                                         "workflow": ("text" if workflow == "conversation" else workflow)},
+                                 status_code=200)
 
     except Exception as e:
         raise e
 
 
-async def process_audio_message(message: Dict) -> str:
+async def process_audio_message(audio_str: str) -> str:
     """Download and transcribe audio message."""
-    audio_id = message["audio"]["id"]
-    media_metadata_url = f"https://graph.facebook.com/v21.0/{audio_id}"
-    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
-    with httpx.AsyncClient() as client:
-        metadata_response = await client.get(media_metadata_url, headers)
-        metadata_response.raise_for_status()
-        metadata = metadata_response.json()
-        download_url = metadata.get("url")
-        audio_response = client.get(download_url, headers)
-        audio_response.raise_for_status()
-
-    audio_content = BytesIO(audio_response.content)
+    # audio_str = "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwH/////////FUmpZpkq17GDD0JATYCGQ2hyb21lV0GGQ2hyb21lFlSua7+uvdeBAXPFh/poINdhzguDgQKGhkFfT1BVU2Oik09wdXNIZWFkAQEAAIC7AAAAAADhjbWERzuAAJ+BAWJkgSAfQ7Z1Af/////////ngQCjRJuBAACA+4P8OvwKf/yCLDaBtVJ8xcCvtv/1N/R7W7JquVqwz6f0f4myCK6NbOG4kDS3Daj3Qv/HIVxZLpajIiUA/m593V14rUNSV1pG7EorKCy8szf5+ajO6TXRrB21PZEt8lkpusqM1aZAcasnh01l94SA3BPsp7anslZuU9npt6XFTfSB9kL5pREFh0ycOxpZV46/rBpGEKqje+/+mg8hqwLt8U6dSMKG9XKS+bLDOxgQxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATz/G18TKVHm+CNKfPWdJgdI4aNRyNgDmhVuMhIk2W1c+Wyhd88kcgvmFtY6BoFMhYNLxhIyTwmm9ccuJgDhmIGFfqY67OfLvCxYhygQeNbhquNlAEN6VIXC3o2HVso9TowDy8/smVxQquq4O/0cF0jeyQtDwzFb8GYvypkSjahn1bFwgYivTsKMzzQE4pQ/FE8Hz8rHzb93dO2407S+slRsPSi8IAWoaT9ZNeH1fw5R+1E0bzsqAIRd9XDD69lmhLCxpD4b4bUX0iwl3xtu74OdNo9GGxDexLwDCob7IzshpK0kGoCtM5Tk2cYgYVUPxd8iwe3EgUwpPxHoxKy52ebDzfU6i3Yq5j4EU+8z8cszm65dIotwWFo7CwTDfJH+DBxO3QtFCMRsNZw1aeiPN1/38HkGswcy74Dwc8RGkLopqzZ52RmzjElvKdQYAD8hm/HX2gnCzITGqlsC+EWg9JMnVu4KOm4458NnDbBdPCAd6ebJN5f2v3GpnKV/5D9t/+K9HFkFFW8s/WHSDvytm24I1L8RcpWTFAqt0kRAA0JFUuWfvZfQ4blpa1k4Egh/D9Shvdcfpnaz9pLjRZlaJGGvvXkqzg1JCcpA8IXVi9zEMUIo9qJUPTm0BStn5H7Bo4tCv6wRqbbTjBfmXXXmv30+fcBZ5gjCQRL+9XIXuhKSaJhN3x+Rs+Ob0gfR82H0URez2jFBmlj+IlTQuS6ZGb1vfgxWILY68Vtcw1IVO/zDLfEpKVl5LgyZYeU5kbaozk+dJmG41bLnbKt2PVmzkR1UJBrE7gW6CCCT1Pp28YRaaCbFzRc9NPXHRsHQHWueO5vl6pV+P+jcb8W9FyvekloYj1japWn1X0ZZSrxyeuf0fFW34Y633qaYWS+i+FXsOQA5kjLHuv3WMxIqeFX5voFmxNgTW7o3JU73vU9msFDUgJwYa3L8t0F7JAWtptuV8SU4BioFX91F3PNCIlOe+unKC/nA2cHN+M07snqX/0YQnBG+OrG3rzN7Mw8EKw/5+HzLlzkcE3RmjQ36BADyA+4P9C/0Lb+f07t5QSLPoCEH+r/2YN9TWKpHEn7xrfX80ycW+Hvi+EhVwt4cLgsC0kBJ/p3yGq224trhRGZaBDPtu2c9WNYU3cSaip0Je7HJ2XPJidxzakJttbsOo9/SrSyu2K0D3tMJ5ePOtgtxWIONF2ZZuXz2+X5MZxYpko+tZ7CIxVE/gi09qTWry1FvbHVTv6aZyTarnwf/nWQfVqhk1UNfWgnwU9ZtrYsGlgVq4Yo386jFRdnvOg+jHA+JSPomn1cIgoR3q9MmzC5lqtpS30EbZ8vxId/TyK91ywW28nIBGoxhmcjv0B9brOJMJwv3uQpl2HTyeizOd1/kabJtj1+5k6JuyNWyTZ+nGAtjzdZX0KsYBA1HTYOJEVaja9PDgXMcBO62O1jvR4kJOYdV25QcxBCWirtM0hIm+kW1Bsv2As3yYhsqn3C6vG4wHqea34a80PJ+CGs+hq77wADDP6JG2ONBKRhJoAVqyfBXRUMgBrrDV0cxrPkzCGrgryp8+ctDbERF0pivVOm2ijKHlB/9je30ti/B23lqt2iKAIxIbHTPOfAxSbmfRF9mEy9vOSj8y3Tf2wTmmfKlvUy0NingVUPlb51r5bOld0JH0NO5hS6ZHRJtYURxWlDYTI6/xGBrrpRSxXoOWMaLe/B1fcc6P/Qjqj+ISnmCMSFENaQLrYGkL+rGwh2hy7i4T7apqBV4Qu83TathhtxYKkogGQnVXB+pdfwMwE7NL060LPWAL9RFfYSaecob/I7CWCzsJ6P7Ecy6vtzkdcKUi39l45v8pq3a7YbjQLIL0mkmSd3kG2u1OxTyA5hCkDgH+Eo6X+2qqZ7B1Ns2qeADu4D1pEoNf6MfUMGSd71dUxgIicDDZOCLbqJpN7FQaJg4pRqZhyBlwpCfhpheF8RTAssdEY266KI8Xkh3GP8R1RW2tlXkolqwNEJqyh04ZIsRlT+SxlUoDDET4nAOKsnsFoBvBXvA0+mGBKAe4XY+2uoG8W8ogZPMC3izAio0gldymDqlAim+LjM3MBqjxugn+w7Q80x6xHRwlPXsKvpj3J/Y4zKa6MwZ9ZIFQRxMazrjjR0SAUVluDDAYdHk/6P0A84zoAWOxL+Wbzfqtz8ndZTK9CZriM82jF+RBfz/RyyNr0zboeaCIcMbJQ3egBGczLzGSoWaZgM6Ts5SjQ3uBAHiA+4P8Cv8KYbi6rouMEfv5veNAffBB3wMgtrsC8PaRN9AGobpyAstc5iukV9fu8bEglyCa/0SIjzXH+yWOklKyH8oXP6Mq4N9YI/JIeU5Dsjy7n9RQpbJCBAYhA6g8N/Jwiqh9kEYeGFR31gnuRejz2oyJ0+ngfZ+8yxtDzH4gTPJfRv1FTuYsck9a2Eevv5sVaz32br4fZ1dhuFC//nwWsrAxVX4wrEUsTeSNtfjD0a0avbJST+hl13daDYIWm41WNlgvHW4Vp21Uvm+geIk1PJNKe7x7htvyfMqU0Hbyi4tg0wxGEPmfFN8GcqOXVqzlwZPcW6yUpoUUTucn6jrCfVaO+ckg0pbA4knSBRkzPLCw2jThn4o3mnsNQrEqJpPAXFHywPqy2eyvy2G2YLcLTPCJwyZZchYpxG0e4tnjIz8mWaZLzUb2lJTRKt/HmBvgfulrDJ1xLu5ejZZPIgiluRPqA+/gUGpkwpIbjW9nVjvpgkTXmhR1TMx3q/mxXsfmakQiwX6QbbqMVXKXP3drOd4lrLsZcTIyxa25dLVzKDcQSrcR0/uVCQ/KaYCBdMyHPaR0FzoA3MwGEmsSLi3zIArv2G2BMzaWvrM4xAkBBThuGZhqYbnIN0Y8S6+pJipGwgoXy43pRe5ehDwgQ7WHsCPS7hhZrXGuduU+SnKW8ErC5IdKlJy5QCkttB4XUeSgbxEWN16lHtDo/nq6kTC9CEN0tHeBIsvQspEGTlPP4X47GlI3EoSK/R7zAcZFwHPrlNRRHuelCzBG6hRyDiv4octhuNJNmD4alvpcxP1mALagD+g/ap8Dyx6JUjziteOjNSrHkXHAOA0k0wbk6IFHCiLpV2RjF+RNfm/wyt2Q/TDK3zooXEZUl5Sm2Xe6bY8msQziZBqb0jKTMsPzESZGGXqM9eMLg1uLW01j0kU6h4N4Sy3fGCHewtrYLxn8GF0zvt5YIr1lNUGEb+p7HLViUSWsY81Hfivv5HSdNeXtVRWMPejTouPnikKqvFwnmSWcK7O6IHQww+EIn8vhjXf569ORd0QhQb6RegkerzxDwG1SBsTV0PemZNtvX9kcYwnKM3FvwncWa27XDDRTjP5GSS57iN08CANrlzNg9O9+O3m0pm6r/J5oJVrmO6VQY15HqjPuPLp6EWIEo3iy24pGYUK99IDQYFqjQ5SBALSA+4P8C/4MYbx99HXkQlGprbuYgHsw5/aTGO7m4xyiWHXtSk4yg/2kE1VB8kDCj5Yy9tozUwMWXbPukPE1SsdnGPX6RKxeAYlOxGJ/eFuXgC7YXAxwGkPQu6zZQhGoqmeHL3XVTLgW4/m1xyT1kkpHpd7BQ1ovIGi/rGMwO1l8YlWkS1N2NpE4pMyQ9+DFfzdIoZBQEaaCnE06/vZC2HJvejul5JzYNz3v5iTDEyaFc8A37+2ltZ1dOST2zqORPcLvN9lyq3MBDOaiJbqz1RuppvqZ/sXLrZZ01urz0P6XeMaDQUtSinR5RfZLsVk59hE41i8Y9o/A/bU/ONn3v2rE/wgUqp6KEyYhD+snp6uMjK9R9+icLc7Tv24wgJxP1z4G3pcfl9AqCVDVbtKy7zFh0kyBnhY4PZtTAG22mhjO4o51pF/YGfO4MPacQOpDYrykQkAG+furQjdPEdqxqCujezrwIHkq0p8jz4WBX73D7BsPZ7hMxb/8CLfmrjjt2OHBbznkFyHNqXrQXApub14a5qpYKlscGN1FKoIm8yDUwaxN/1vrGdQ6TIs1l5XkVTiS+4GRcdVChB6ew5Ag30ezWSUGcXRJgfJrUwIACAVwV3Z3WxCZW+7QX51ZM+VDQS6kshu1JS3+9wZUJZKSsS5Ke7PDfn1UhrkP9idkJUrNw+Fh7TbkloBmNYMfEq/53U8lR+OSohlh0nmgd0zMEIyWdyHC43qZ0i7oNIpVhYWObYJcFZIKEoddLfsgERwZ0ko0au3F3RPOfEb4XKwgOpDEShhQEM8qgsvrhtzlcGHSSzyWNQXGu8mfG62xvX9ypy2zUe0B7bigOUFbcyixDvCCaTgyZdmFFaF2MrDN/UekFm+Sz9onr0cuGD1Uh5pc+RgJywLiqWtYTGGJQi9GNJ5FE2xxKFtGEDunqE7X2TylOdkfaV9phntXZDF6cCU1TrhwzQJcAtjna/LLl7VDPuuyJw0+2NJzS1ld8WAUEM6m84xZIPZDjN+aE6IJz6EuNkKGuexuos1rPekKu9yhdhirdswsCLFAq170YqLo8OImMbAuzpUV4ZWcoQjnM02vv6LjNagHkTP6nSb8mgnM378a8SEQPCxcxO6DhaAE4R3gunaAjpN41StRa81QBJeYINEZ+BxjEceYXeeYWmbaN0h1o7/dUTq211nlavoRsvpKsKIKZ/MTnT40VONc+DsEY2xco0PGgQDwgPsDYdIT1nTC/O7X2xYd7oSuKoyz4lyVJcgOe0OWYDsl2OtNW+Tkgr1P7XkM2W0SlMvLo9aQJCsQyflHl+d6AdOf9c22HoLLeaFM/pPxry70h4RVMXTyfd2EwwbSGaqOkORni0EOkEfKeDbZgHoiCk93iu5kGLpBNxyBBPT+181U5ymVyt4mfl29chKo+yq8qKPhp6x7y+WZmXBlGNAuzMUGJu7WQAv1M9PMpd3hoNoo9taOdoCrq35VpKMBSMPHsdd7BEW8+h9bXd3VDopRkCxePlVXt2HE86CxkXLJxiOrs7VfaFljIAHLCJRy9o0Y5L4XoVsv/nrRuQNo6iZjxoZ0ukQBIMgKUUoqijuS5udxMhi0ZX3XIHcqQIYxofAJxixcyZpvRLWSdeEcPT9Qi4C+LiEy97jgoGw0DwqITA6ta+Vh0hQVlzr9tTZvqB2FWeQbu+NKi1eCo8xkGaNF/ZCWPrRhs3tY6C3JIWqNY5XYOjOh1+PsvbM/S0DObZhhdy07Ba/h7z0YEIyVUv/NjedmZ9upGBMbjWXfLRh4mg2e1V1z7K5ZhNA8KLTRIsHkFrQFnj7VI5XkEd+SRWDKGFHFt4YSd3s+eqF16YJjOujkyW6xQWfctP/TKtr5W6UEm7mPEU2tRSOadr4Be+zYYZNXBMXX3rre+XpDJZxm5CGD8i/RCIt7Bj1o9V8/ksNwNmP/dlGcWQCx+dWPvjMHtW/FkjLArZqMuysMPDl/VqXiWwuCsPRK7M3K9uKwuPAx/QhkT/3RhT2Y3IcvLmZ+YliHNzMhhADPi8Z0vVJDqkPBPQuoOYQ09AkwvxDGACpkBo4Mx5BV7AyvYZeCJvmR8VwxY2HSSvup4+NOiCE6u/+KIufM8mfBpoYkOvJPZSznFgG0/NX2zxPXr6t85W54fi8SMOU4Oislo3mXqCSfJBObCApavVM7LkrrsgoNn/YI6J0ni1jIk9uJaG/p5Q1AUbPUwToHijLQOHXwM3bqr0Z4jdxi0n8COpaBqMLKJsbBLULXGcJ52tPbMZNVx3H1muq99IM2oRvhTji5d5HWh5c0ggzWDiyE6HUboSnKLGyBiH/lKjmeYjVNc6UOf1rFn7xWxbvkCqw43vpg5Cz46zGJVuitdE9WNbMRekhIZAu07KZvD+Vqkpk3aKwOb0Dzbp9RtnT8G03zp3U8sf3/hLB49+c3BpOLsLBi5Ub6uMUQeF9ZN/TqQAQBD9ARuBQx8e2y1buL9bmO7HqO6543Aq6RSh+GtCJgP93PoerBTZqJ9Vh3o0PGgQEsgPsDYdVT8pc0SUdaPKL2ouL4vBaxicPgbsSwAl6BKoz1DsP44nAgQJjudle6Ud9jOJn/RXjG8vuVrFDWFC5XWemYirmz4Zcvu8p4N9j9ufc3hgMhXagqyiRThTPTsfBE4CTVCK28gV4HhDrEWbx1vhONewQu1EyI6uJgL0t7ox+69tCl/JVUv0Rq5Nb6qeIyRY1DwEFaMROFwABkk14gRFIrOz6UipxLAZj5XnWv3rJGbZDkaa1JesStqfqvV58N637UCHQ4cmO8EWeXSB9CAyEwWADoaNe5EGoqD9haf58cvGKpfCu51oLFVqEWVXeDTz0ap1V9rqYvMUqMnuwSZRHqeGN0zIQBsugTWH+N77y5dsJsMNrc/Gvmj0otgS78R1x6r3UmbupUCPAXcOiU26XWIsUdSxZgA3ZGBiQOnFhlLa5h0hPRD/1uzlscr1+XQ9znALMiRwdE2T7DxDOLM7bEGyKTfTQ2ik+ozl9osj/NE5dnmMsmQFiEutxLNH3TeEiwDFqZnACzv9pmD4XYEm4wDEObAys4+AhFP7bYn6+AOW+OGfRDC25TCeMt9/uwcPX/3pVGAk2od3dA4/Eo9rC1yfsYdcXOzAfhyl72Bq9o2qrq0eRBRWamNSZ/P+9glLipUtUKhwLJUo+oMJpjjyXEKg8DSy8hnUA39TEXhsDFYLc7o245+aU0m+OF4PcSrcq5RpAXcOmlj8sctViIJgh6fhyNdjiHUhibn0jzaGnqPHbQT23syBjJRPBYygq1dl11WVT1bha3jaVHBaMQBZXz+WV+Iy8lDX6WuErfkm89TNYcr6V2yIA0KKHRSuMReMDWCkmjnplVjpiIhEkMqtnlYGHSS8XUWAnkALFe7z2i6WsJJGr8I96MQMYWcRqa/o9hENzN8GuVYqMHRQL14T99YLIbrfkp38JsHftZNrmoyL7Z3vwnDw6wjeZr2C+YoZT/S7AGYiKUedK0aGHjmZPYpycmUrTLAvWEJdvXayRgl7OCQytMpKIvvxsPYKfj+zUkmf1Dd4/jhxCdwcxbtjw9CN/zwh9vmE2X/FznxJM+AVdWbV7jYoegk28WbCraoSwSCqCSRzZA5JThtHdRVNqVamsFTdMgK2X6VWlFcP4OhsWCj18K3r3fZWEgrxBunJB5FHyJBpbgf5ymHs8mNrKKcZSxi2glP9W9b4SN/YP7Ca+aLLfDgFCjHcPRZM0EUf+ZTEbC8DF0V2SmO8jKxm+O2GOUhNuHfhnA65+vc/HI+S+Bd1E8I+/CkwiTNiOupGqco0PGgQFogPsDYeAK2EtOI7rL4huasIemGxjoR4rB12eL/LwJK9oHWVa87z4650eE5Z6RAvabGS3qgqnhuncKFiUCB3p10mVRY0I9NcL0sEu608d5TRYBtk/tqy+/0UJPZPstFEZl8cD293xvxZY1P3mErf8mmh0CpaJXgQqOOMIbDamESp/yZD4XNgpSmm/l4RY8G4dZETqCI9A9EfpO6h4z2HFZc5Il3wL0CmQcc1g15qxbjUdSl/BZ/FnJbfAtwXvsLMq7q+pgiEkiRkuOKJmROITxednSp9VZb8UjMd/k7ckAiRVUc/h8hQDaoH6G5bIqCXrf+jXxtom/E8Jn8bAPKwr3efi6wEyfvWBX2EtjiZNTeiTPxTIJLHtA+NmTGQ5+NC8m0nwQ5qlBkM9JfVq7JbXagyejEjQwt6DSXQaIfMdruQmJBSthurFgNXOeHV60YN7AT4Fro9fEB5mL6ICVEyo//EkApQvY/X+x9/hVfiutVZ1pLcxoB0gIjYfJNJUk7Ypndx2Sm9sKdjg9L/TBYqi1E7Jy+FFbhD43PYoc1M+MchAT7/8jWosNM+Nc5nV3ftqZm8v+V28uTDBk+LARgJd+MAEId0vuK/VrjBtHy6q8eM3JUu2EXLxgyrwW9K48a2kYaBLst2Ligbst7upEhKnPt0wD45JEw9ebbta4xZWemrQZ3+qM0wUcrLzW4XUlb+FvtXxf5StCbjlCU2GRe/TVfWkvCepTUzhe2z91ZHqJqPVQFM+U73TEjZU86yY9Fl6gCorzALZcN7pMhgsftv91MK6ldW+2n6UIzN6Wd56xqM7Tk/54NgjN2HmLd2j6KTaIK4Tlg1PhzCHEZCYCAmFwWON9k2G4lUkq4jNHIDOJTC0NQZNsEPrFjdlWX+ZdbeKx1dNHMhccxIvaXxJInySsKb67F74E+iFi4zKL30G386RZY0VmsVucokpLHivDVIfAKqQUP12I9azVSFWY4xtS5lXzyGY+kY8Lzo1XDcbLYypTJVeI3m6TUy3VI8z60o0kzK8xZ1ahmf/4ybVQXhI83448XsuiGP3+qTJEHSJ2Pi6rgSg0izItLNo24eZH2FPTGmqqLfe2nYmePD0VmBx3GqRQRBXXsiUsFeG8O6xC9VEGRBLQTdHBIYMWy1b2xVaez6YiqQo3uBJEgSbKLYx5ASYMzN92PfcGziYV7YRdK7VpLDV8OasIS0TXAZYuzuA0UVcjzhJvgS04pSVJ8suqnbVpCJFePpyuwDcrtNStsqQJbbG6/ycfBenDlCjStfB/Z2UBo0PGgQGkgPsDYbx+3kEen6Xtdi38McfZQ2awRD9+r1u/wUM/0cEcJs9nIZG2iTvNnzTmmAKh9nezyYNx2MP4oVqVk4clwqOtcfdWof2o5w2oOB2TPZRXcCR9dL9wuxbJmUXS/TnoO3ehc+znBut/K5/3Y24P6EXCZY4mrTAnbnyXXQUUvfOIiNT9l1VTOKPVQOwKXqKBnLTrLIOQAZu7Va3ZLZpGJwjfvYfjMRLfQAI2r0dG/6wxhkccFkbpbHfKzZKduQANa1uplplUqm57BZl7oBBMXuWJpwiMKtZymna5IvgOhOsqIjXD1PsVdzriP15rCYSULAYkEOEorgaUWMgNdrNnC6pzJ3V//qebynIu4Hze2e9RA6kEN+ZeQ/iqjBBE8g2w8tOJeMb50Zwyr1hOnDbuqDhZgnmr4h9i5I4O/s+lrjewKHRhvCnurhtTkRZuTjsb6GA33S3dEIyqzkAmxJU4hURKhmnIUQbRBWTv4cXs9lXkioGS3Q5vX6nbIPHpVlZ8DRr1SC6U47EdsJAqAb0WuwwiWITGFbw8nnwyDGOzJuo0jSwRzYQ1iljXyCTjr4vUtPFAm/BXfiRDq6mdcopTRGHc/iumV2HTCMf8CNkosUn3lEIt8BD0SvqQRdhznygqME+6Vd6OoziUWXNyP1LAd1YimvdTb/8Vw8GqhvAGAyONGnE33ZuNtZSMfcNHPWd0VASuO1+nHCLUI8bhkymYCqHtUMZJOZVE/eGWlX+i3jWnXHvnPcSP3XEckv20AEhBaNB0f60Cm+7fYYrVmc26vQ9nX7gEVgPNLTUngVF1HB20C1XphauratEycdAC2W6Kcj7LmgsWZq3EH/370fbtpiIvcWHSBuae8eIXs/OAaa9X9NzJncNb/Jha6Dx/1C1HCwyLHct/AiHQVq63atRTeVlxNUQw4E2eg3wJy0FH8CueqeDPVW/oIGCAvJjipOVFERcQTEkjEM4zMgpxcxJN/3SOZhRpLZMeUSegcjnb8k6ZEjnq/Mlh7wQkQBdtfHCY3PZAvT/rw09P27NG1sj8UXkWt4lsLglQUoPbQZ6tGATQZsC5Bo7TB/cZBGFpGrkNjWMnNL4+DuRSC1s25Jvy1gJn0UQzRsI1xOU5MkQAAhwdfxiYUwLMKAiUOPZcPiuS8nlH2bLMeuCUUOoakjTWCrPgajvY5i3HPpRjXKe8cGmPxYzNjjjjfZamCYAG6Tu51T6zklALRMhBASibZJ7zYIzP3LOQTr6SEx4D4dAHu1Wj1qwVxfuJpudMot66qe6Dpmnso0PGgQHggPsDYbwta7fhfI/ASiI/axBjhvq/VZdZQq5PKik0DPTy+AxrsBDHdK0pYzhtUU2/Yj7ueNcDlnEhJLptKm843+NEjKSSbhc/VMtpm4O66CJvHzbO36hxZz6JflnIYGpG7Hf+cchZt8i4lOYEQjokbdJQX/cKquJjyUSMgprpy+klUGMPZXQkInXJKSE5EuLoZbfosxTmNhTwdRNDwz6IewBO/neMr774juZPXh7c9NyJFdBWr5ismVL0H6mIGEUswI0G/Li+CMmvUaJEpqKoj870JOukfL8SODjRM2hHNZPrCdIAydGKHcOLU9O5TUwbOBZtTedQjYWbBH6+TXJ6mgisTFoJ+u+zOauPr1FbAs+h+QTb9Oku+qLMoXBj7M+8jUlLGiHeHfuEL9+H7KDVtKA3rS6A9lpEfvN/7i80xXafvxJhvHreHhSc1IUfbFiHviY/0yw6is+dLcHWUtUVLAQMUSbI+f27ncQnIHBypy8qQy7KdYFT1Tr324ZZPVzenttJxyuxV1f7woSq63tXsc3miSjKv1X5PB+NMIlLm8qZ4N4vD3rDGhmVsqns387YhQZtoUE6RsyXR5+AUMIhSyVwPGohzfSGo2zRg3PHDZ1dEUTeYlqleOgGgYMNGjqC6h5Ico6dWC04HK/rRUj+6hEcx9BC8mRKfnWzaSMdjthpUdyf2ZT65mZso1spJPwXOhut9Wc0aYCeFUZrRaZhMdrB18vi+m3Fd4F+rVzUW2qfVdTeXKsbEIYn3uzhdG5DfTTb1DnvG+QxKku/H6UuyrudhrKpmBVFEouH8+pQ48U50UtADqFFHGNosWyQf8+QShRUhGa6/ERHjpDt3HC6O9y6XmHSSzbJXDNw7ywPrYSG6G63AvpDXwLHiqxH9ujKb/q1pvYFbifOvzNVnMtOsEkbAuy/yS7sy7+i+vdJU6OF4ZaK2wcf738DEocvO1WzU7bdnOYZjBP/aTN1gSQQnRhzQtt+TA/l6JyYRN+hpd8AZoDwqPOBjR0RulXGZegOrf6g3xWPH+3KwbdFoTrNIWLd1wIreEjn7bcGp/Uc/WUwpaEKCSJIOYuX4gL+njGXpo1miW87N1kKnbpP70jDPMy51czKO80r6fpv/UlXkFSPkWHI4hZM6eulZ6q/Klm+90LdGQa3pqTSGHiuFWFJi18gTWGXSXBs6tn9cW9plsWxW2RHLXsxI0nOHurKFk0E/cqiv2K7J+4NHiG9ot9HIvuiH+xuquIvpJjuqtLVAwP5AAIs0IETo8P3j90f8h01ipx3o0PGgQIcgPsDYYqcuR1RKLrGqgbLbhhs8unv+a3SAZ25YCeu/kIsnOlH34g3jVRDk8X3PLamvlDqIjvfLkTnfvZjEG2uPavFipRt0WDyAw+41Swdcl/3t/rkiduS2Zsz8l1Lx7svmc11d9GmlJqwnMyUuLrddr4/QK/1bMgns42SysJ07fKRrDvLjMaLvbNvqeSYMBHfWOHMODFVga0DMkrBXQ/tLscze9fhmGo/ftzmvIzKwxT3vrWfbV9kX2DMuOHGwp00vO0UpU1yJZHZyjimVn/uQJ4RMAdn/Bz0VotXucZc3f/jWSAETDAta9ERzfDD4jFYna0ivT/GrsvkJntwQSqcG7oBYBnJ7tOa9dN0wBbP5TeyCY+XrtBgLAtT85fCd2U/+64wVQfQnYWSxTICAhpS0VnNs7dijrytlK8hHb6idyPd6Eph1JipIqtIe3kvi7B41xuTlE6EInfT9F4RHphzW5GMkfShgAf6oxnPyJpFplMbu3kiV5M6NU+c0W15AZJjyvzLwA3SCbqgSp2DKItU31jJP4QtY4buKhogmgzzweAIoLZLUh+3baLf+4jRV3SJsSWS2BU1HZX05s+MpcQlWqTl3hnQjhb+u8rjaGoD9HfrwYDPbOdrfp+v5BEs7/43BUgY8ggJ9tw40a8Nf9kHrYqL9hbtUo3MSWca8hIeQks2o81gvHBlTYckbXEtKF3s4JTv2IiL6MF4vqly/3sE4Rfn/l3WAP8Fna6YieWj4N9DoouWNa6prgYBhbihTqgd+WRT68GK4ndUT+ZTLM7lXV1kndit0gdbUeFJw5c7XJpLY6qb7k+PAfZ8mqsRumiJgexgE/i1nfO6rCXRLO27HPPXvWG2TdKrnl6RXzScuHJ43TFHJsxglblUDtBHX6+G8mjYOJBvrPFrGSfbMP0PwYDl3CFWOiM15ZCulCx4LISmL1BQhvyFJe93wANj1CSbYUWteBG3fSzm+/rr+Qmh2nNkbCRwZYtTOuDdtaAvVtEwcdkHb2KEpdizkTnUUJnfzfS+HeR6iUyvWoyxRBZhosEXzL/6CtbtepL1qSvC6oALOdU8FMpsPgnpbTfiJeSNDWitMmvjy1vssQsVCSYZq9YXxsX+0MHMUZdtceJ6VlupoQSQi/IeugQSke2m1Vp5Tcc064ZhptnoJn2bYYvBsR5ANJwz+mf9zYLXGl7DwIy82KkWNM7Z+mzaCYMCtctiZjuGs0Bcg8/yH2QoxZqwksjrPMs1WngEC9x0OzgOBxlqxFdmRDWfmRoKIN3Mzj8nFTcfo0PGgQJYgPsDYYqezU0DZhwq1vq+zEUjLC0m6xr8qgEoFKVEdL/RSYVTcGpJYaFpLQtrIfpgVWkZPXVz3wduM8522Pr2BGhQZSU+v8pQjbgKh/+ows0tVI7Iclp5jzCtONh87th8o+WbzyptZW5s7G5TJjbH+OB6X0mNqRy0ktmlPRTIi79ML/AFWwiX1wp/x/E2Vr0krR0PKykXZnfP+XY75QyuKY72CIzgruEj2lyu+BHHbIGWWFQac1RAoRlneOUcB0/vMiqnqslIAoJrYnCIIUp2CgO26eS+wc6lwQbKPrSwuME75rtMi6uKXZ649UcI0XrQQwRihlnqvTBWtMxMRTYKYwKpn/LVDftMeIFFrJrNRGLSnUpm12erQ4fvMD93Bvg/nX414v5xovP20/ND8aWTvXv3VU3fxE82r/ETDN2GTnlp8KBhOwDuJd13rAjBldeBmfI7u4J3Ql7wGfo+LPRZsYgmSNGDLpeZ8xbxFQYa3Z1Iz21TV9BtNlx9cJ5bGwiLoXv7PCjfKQ+8OCkslvhKvLBKEklAW+po7wZ2jOf8o3Iyht7+HGHWyJo+RkXu8b93iV/gbfhkR7Xhbj90xP8/gAWhXSayET1na2bl1TaGHASRqiMqbHY3wDt6Q2ibOLUz1qtYK2b1oVb7EnP1PWcfcnuoeZHgjGAoxC03SW6pQJr2tV2dKCIsUtugWyHC5ZiPgVkS3fupACdbLu+uFJJnZqRIsFgkJs74qPPDnfdsO6ooUgH84U2qfjkouHhDPYpynFtLLLUzmRU59jEhwwreGexlbcletUsJa7MkfPVSLnVP48tAAsR4OA8rV9ZdCaEUp9VpUGNUyTZgrKQdw84evADniGG4sQrzkIuHIJBqfZm/ZxFI1sHpwHOaFxdZHrZPrZ5r4i8csqwHdM/05I3goG1JJMsMAjs09oXvj+qb1tidItJQZnBK7r9g/Cxnb00dOHAoS249ADjP7tTyx/SKLUG5rtPDeJ8erk747RTMELsoE1zthZNWrRpm0brp6MuGy1PNjtE5T8q4tEsyaqljlrm4AVmBf3mSmUFDtTawTSXe2/ZqzkZSX0wzX3B+aXrieUhzChdMYvvNmEWXTzEuByew9uE09aKr7UFCfQCySm7oLSfQbCSLnhRP2UGngYC/cr91DTRnHFZrllA3DVwN3FEuQYq8kXmFNreRt9RL2drUZipwEw7GYSFEM5XugYXTYqNwF3zJgLWqbQTcp395MsIZbyRhklryvlJRnbKbip+JRYR621vMCYM0/vmsq5o/5pClo0PGgQKUgPsDYYrCEGdK1TjAyGVEabHs3QHEy8PVTrVCPffM+cvYEk5+ZxHp6MbklNusExHdmXu9XtL3RtEy+EvC4H7e86YQ+CG6io7dIfaopsTzvGIy9ZMCa/ClN58nuRHA3Wod+HvkY2qfeyXK+3+0ayEfEaa0X7+PxKtk90gs/2J/JiHJzbTYgIfhxGa1r3quTROPpBM9h3A6C0kitYnxfEx+ev+MT6cZCAaSStqnWmVNrnijonqMZMlngLYgij6pldK7YDhT0R3Gz0MrVfEEH41a8DqWGY3mujGTJLolikBxsSzu81S4bbF0MRz5rv93PCWbf5e3Ve3qEsAEhThdW5zfXOtspsD+AvWIbrqm/uilxUlzK9L+42HtO2PSjcRk1VlLtpsVzER5UeuCyVbqolD9UOPMPDpa9vvss0Eh7BC0kOJ+MLphvHtXfa6NdwUjeP/32JV0aS35V3FjTvPN36Wdyjx4Wc8h50IvZ0OsnVVLMx6SM1hDk18OEB1MkTo7SaZBEHsPfLDPjMd/DscJJsuDHuWLt2Uk+g4RLPZctV0/6N/5i79PDm8MEc3P/Oe81xCviZL9E0pf78nGqPEd+mu4ZACXvd5T53lgMBbX9BXGRsIeEQ/3GlcnwO95rM422yrG/YOqEVGHI1jN57cKm4Rv0gwSYAyasj39CIefI9Tje+PDflMpBncEm6rRG1Bj6vqbLyjLUykJl0NDTmr84fpxz+S7IPnhY1zasdz5xgaKnfhM6Z8nSBhhcS0n7Ml5oFohiCVFMdftUZA1z63LOv1UxkSPVKSlVsSbHG5jPG4A/SWDwJ5ZXhUwzucK57bWTj1uyKkrUDnW06tvUo7OfpQyKPSEr2GUEiOU1k0anHkvCnK/PMmNsRoFR40fIFFkf1IcGIA4fUhASddMiKtSujBbnON30S1gIXKCjnSg0VJOAeFb68xvBwHb3VVPO4Q9oCq4aeSfaOkLUudmobEk21hN07Rz3RmbeMS1X9rUT0HQTWVrVlZZTpuzD60bvs5EZ3QFyAVRPW+dyDXcj/cwjKlXtlPMv8mYRA0IS1Ey94+5T3YpYj3/gZ4usIzxLOV08w4SNeedADYuH0wAFO7yS4dEMm86PXpZs2H8hAm4C5OdPFxcV/9IcMwWkMxByf32DTZW+j9iI0PGiBJMCLS9tXtELCbnA2HCh2TbckUq7iQGUU1smt1pShXCCxrzERgFfSSckmz3mV1R4/NXHOx6UuB7epGbSRvuBGCt2gnwXow2KJW0HTChxhq5+FAvIOva6e5ftLo6o0PGgQLQgPsDYbxvzO5sTk8xtPyxps0QlRVnT6QDBD0OWZCnI29IcadB4P5SOV6qcTtd9LdoPjLuIm3fvq+LyAvj2zH95maBMRO8CSG2BRmAbShELvmTDGD2R+ADR27BuilgeMUMw3WCTE0NkufKetSPioXJeI4W4aNvSmVNKU5h+kC/6NKdOqIrh1gA9VDJgjN1GPTwhnR7Ftw947gKm29TyZF1K0UqA3jIYW+LzLpHP5VXJ/lIsQaOs8YLnjWSA6XDq3b7lRktQRH729ykTqXc2PsLdffyJXdmlgMmMfG1dio++dvA0KP8e2ww4Gt+6cwiHIDR6BRzg6NVaBu3CksR/whc9+vmlRlHxYBmYHkysutrIJ0oRK9m4WxHx3BIN7MFZDoptrfp8WYF1321jwU5TNCiA6c7Aet2XUxK/aog6fbSQ/oICCFhuK0I4Orz5pmB7OYs/XqPaR5LYTZKlVVrJ6yibOJn+XdfXg/cmeVMx4p7hX1dcUVTNY/tLXPcYzoWvj/u9PcBT9f4lJyyMOWLGtE2C0x1bTxhZgwdYSJVkwzseao8uAXo3LMH0zGHJmh3WxdztzpPTQnQLg+DAuSgShQuda4QaTIWT3yECIQ0WEBOEVukCnXWVD7BxJYHoY6NsID3fCIyr1jyKUQFUYeBuwYX7STJ8nQ/Hbxnmeo1FdHbzsxeXwpU9wjB65VxxEqw8+9CtVHmP4Pt/TycYTpk+RI53+WwILmdCaI8yiX++7dadO1ORBw+wL0cuDnkuwGhAoNtdsgSevyRW5XCl3TccoEEpqQf5FmUOyPvpzJkN4mojqAHgaznb3K6Qgg9SVHrhYxQ7kfu3dyDrRCUAvzLmqd6NXLlBGG4DXOnVyrIO7gf3lRijnWJWsgqA1EgGfQTTFpo45qFJYsqBIk+J8ST1u0wFawygrIxhnlBAsBnKwWxhC9x4DCICkJDfh1MHvpAgpRniV0NT46PwztLarI7NzchgoWMpfEs1Ed+5VOikeQyDOgb5Or0uoF7tVbWQIJy4ZzTqRE9xI5igNwQqaepZp8T+vKenfUvyHbEs/dja6PURPUcynXTnaZh2WZqDqGhuZ5BvvP6jCnMgRh+M76WNL5HvHoD1NV417zlW9YxyTzp/SHF5imqfBb/UaS/UVs0YWREelS73mvC86HgBYdVN/rCU+BfgNalJL7V0ou3+A1X67iGlXu8t66ocrH4quoTmG6Z2uSJQigj2jdcoIQEYVCF0jEcx96Won+fZCKfAd+OfPs1AYm5It5RsAcCJQ7tsak4BFtlo0PGgQMMgPsDYZP1RrNlYab3Bhpf689pRC5xr1d91nACgE636NR5o0YYOtwPBLbV3sbPSRGnNpEjZRRMQrXSISxVmRt03LbEi59PEEqiIR5Godwf7kYi3oLbQHjNcWk7t77kO/4xZahYc7PLdVwFmD5JBNtdLn+lqLI1X5ARn6q3HTfntPRqavnWnx80pqZDFQYSqXYKrdMcxjfBcvQoakqKwsmnH7FNDKp19i0NQgiTbwUc5+R2U3l0aKY8HhII+qnybQoclpfSU0xo9aLGYu811BsN88Op4vxTArNF9z9f1a0Arf+qYX2vPPR2lRe40OvEpCO5qNfT6k+JIi5zi+qzDxpFraWU9Uk68Er37JWO5ilWYrNpSZgy6LBUVYfjL0mFeIqmetivOOIK92gRbi36ImRgS0rhZcjuHyYyw1h+26x0c6hwl3BhuI/0i9NsMwpdW65qLPAgaaBImTZ9wncRsYGq/oY+vb2PWYgi7jkY0oWKB739TmOMwFW466fJL7Je0pHaBQtk5ANAP9HAZLbGNjy2wNFe/4qh4XnuCPvW3j7e5576PLr3iAihUqz3rqQGc34AQCIYGDG6WK2mb8o+rQse3B+QFifzoVbrZlHbVuWfdCe17a+SkhGGDB9TY4R9TZ6BjGLUMYte3kdos5F54RodWxfDXRFy2qWRXnPqoz63asoQY2B7h/RT73gLhuGjP+YUV4DbtoPGybFj8mgmcwJ41lWrsQxPkCttzq5/WYq4y4s0iR0hp5LJoXkRqWKJ0MCdvl39nMkD+QCvOrsmZGOd0ITcoV7McCsYodC4iPFkLNjXX+rGh+8RFPeLkj38q7ek2LUZh4sJItZkLpLJnS8PqEvkw2GHpf2d6eIfK9m8ZTmV9Kgfxq4ytajFdsS1wmQS9liwms1K4X+fk4RSbpzPcWICzHiOSBbYEYzX1BdpNbAxjxhUV7GmwmjDZBCS+e7BH9u/6IhiXSjWtgb/Ta6IT/sZ9dJDx5id3mB85ZP7ZVhJLimErZeImBgi7/AO138U69FiFDUFvq9CHMUzOa6jY+l493HRPv2fWyCOyNBWib/m1Hr0ewXfGY7lzZzfUPFbPSplgjEthqarZyarO4NsIU74eBa1BMqCUWdaL/UO6BRtHQ41xcOfzzQXhSAI/J0mvFJJQj/We634R3PU75yzvCmzYUaQW9qf1jXuVLBBfkBEe8z46nP+Pnhc5qwg7BC4FZXQJkGUcosYfWZcGWKGup6shQpWQcOlbyhrNPUkARRgZHo0Tjpmuu55///kj23rJsWYo0PGgQNIgPsDYbwlQH8eLhKPZV5HGvhCJ9XjiHRkDOs57TdhTpw/j7bDt5K1AqHYDCyKXUlTAhKQiB8oBtPLdW8Oh5Mx9u72N3IlJ2omE0bas968ZrpuoYAnLkxI/Es7IgTmJ1s88hFML423XlUZ0ZvYMJf452pt9+Y8e7zJgTouQL9tQ603+Qs0eSGPw/kGpKO2oWc1zORzVvIpAbqTXo8V1wLSbqmf66Uh9pgh8SScUDd1nacYE0aOV5FFerpgeJSkceeRaVUb+JVvZQvWqCJPwLI+fFVhFz8AZ4Ck3wyrbwcq0XoZ+2Vbd0xPm0WQD8qmyNrYl/edDLPZgWksaqNTMBOkTRIdLhHmEqTO7LH/nmc0Sf7FGO6R/KQgYSR1BoFD5aATmCzFRgBzMJ0xPtGs0eYwprWhldYZ6clTObKz+d3N244PLX9hk/cvEn7rNkjrxNtk6V4i1nlsk2OH4q9jhc2Cnjy1SxHp87wEOlH0nolK0VlxA5WgFQ53+Rf78/AIGKi9lzG78XUX3V/1sFh6Xbt2xTopuLxAM6BDJ5wac6h4nAnQcQ25FFc2x/oxXVNazR/RuutyTBAM5Gfgo6JgYmGaA0AbB/oRZuYOjAnvUfxY5W0Mdehqs+mxLsAMZslP0746kX3SV5EsGDyuh/kl0+nhjCBx0ER3yuemCifLBF09WEspDkjn09czTboGFuzoY2O17LF6vjd/QqdcAD2rqH+XZhAjLZdxxJUCUsTAZrEApAC6YIEC5vezTq2RhgXajbrXEMjMOeNHbeAADBnJSKPQTBI43Vbss71yF5sPNUb60Lp+1z9mMlsWzDKEJdm9iFj2eQs/j36JLmRvDyC8vXanQUojcGG2FRBsZBhBla+g03MM0/BOU2k8klzzktMa3p89PgFNGpXwL8FR9AUMXvdAcozIKg7ii6xBIxrlkMxZvBVRY9XQPBjA960//cnnX0Hdw+FzGV+9TDaW3uuBiTEwiebbcCmwlYbJokA6/iJeHQknNLPuLhjmuNSrgeCCAUSkbwBHs1k+aSVzoqZ4cJS3AsIi9lq9tAVmQxw561XgGPIRRVGv7s7F43SfHSUtJVRqTHLUG3wvRx/g5H7NDNb0pwinhJJGIVEQ9e6mU5GtNQQG8hYkud5h+Szpoqh1DtJHXB8LOnXtNAdwLyTnD7to9GB3QCbsa9YMvqtDVhaDVjSO0G730eAqfNb+IavYAiCvrTPWUVDBFUn3X514pn+BkuiPdspU12Fm8JYFIPKeRE2DSU3AS67/Fky0gx7MmkOAoZ8So0PGgQOEgPsDYbwtaEyoYjuRkAYXWfuwgoPjSBX1IvfQYBnwfnk3uOzRzKdFSCgtyzzdfo66FhZTOGDmqJ/hHxrplxzS2hIA4rVDdgegvkLYRTZ3NW5rsgSIDMlg8YVNLIsVkteAViu1QziGbZp2+aMx4bmOO9dle9SYaXOQ5N6JtPgmhpJv252pIGImhcmbW7hv6RQbRIU5wInY01sSXvGcDSC4Ougy0OLllv0a7S86MQbGZMwWXoLLMFGoIO4JmeknuF9ZFSalp6N9KQTZMUvOket85yhqPpsTNLFlt4raW8D1E/FM23nVqRJAZTI3HKKyMilXzM9UNU4vKnO0KqJpd88cWrDccnZCPHIEnV3WttuZocfhT21F0popO8B4sXcU6ZhSenBgo9snaT9W55loWgVPm3AV/0/mh8TCetOVDd2cGrmiH/1hfYKDKtQ+8PcVsWH8Y6X8rwkhWrMIiRA+KKIh6ykQ1+mw6c+MAopVGht8iI/OK6YzU3LFO68LlsLTvm0RNyiGlkei69jrTLu1jtY94WVdQ9Dk+5IvIjV1r6TJpJHFdJqjgn6TnGSJMr7A4RhzW4j+c/1dC6OE6qk4MCSJpsYxgfb587wBFWB+Z/pQtirEKkAkRZBuy/tBU45txR2qn8aIs6uzEXE+ysksS9JDTtsIwRRZz9Wwz/iXL2YbS06sFqvZiSM5J1jowmCNOt+t+tW/W6R+ZCv1+XSl50zrPFS4I3hr4mj2QlP5dy5FVBiTtz6H+xMRrSTTY0Li4v+FHQhCJU3rYb85TDjl0cmGkw9ogI72qnEB0LSCRWPr7J3WRArEv6csS0+n3xDysH6ICKYAkSA5nopHnQ/a6bIOgbzrAmG40sICmRG1o4GO/91nLD8DXwZMog6B+ROHaiSi38P2SlZDabp7uQq2U4d+CiAZmOnybJTZdIbVcw4CTQxGekWQ+DEv0LmD2xXF9y2YhyGhQ+30idUqTfb7pbsayPzgf1/lQsLWe88gmZ69tKFBz2qS9NPEGrMyQxRyU3fHjW78h7hdrj0nLiumYHTXn9mEub9996zV/UNOytBtGicBKCY//sANx/FkzNUrkh/7uQ8YJNqRqUkaexuB+Kxv8vuCtcY1HQrFYtilwONtdP+P9F92opH6x1BsaVlwo5KYGycFs7V6pHbz/gxo54CQomNP+hYqC9DaDURNmhkmyQRO0kooPt7tW7929G3d1ul+4Lth6c8m+7LYXTBexMKBuHYuqorbeEOP8Qg5UjSJWO+wmH1+JecANJwbMdu1EJEAhZDSo0PGgQPAgPsDYYoG3adTa+GdpvNP6DjOpXWYi3rpXujTcfq2i8J6ArLLwA5PJQsIITreNmXI5bsknewOBpkV0NhxknUJxOgz6E0iWPg0nj+mTJ1dRQi3Ex2nvT6nZdtDLkoV+ZxviUrq70+YV1trd/agOPWDiOAD+1R+MM7kmUjE4xP81jGENDRBA8vq0rbEFlENBsv5bn1Tyn5qVUpskDEDUEmLMllioMoFbf5UgTalwT0IcxC6NKC9p7KHZwM55U6x41+SHZ1X/zsObXt/kV/kTWZeQO+AJ4zyQcffn+JlryP0KhPOmZPErGYBmhq29z1AqCj2A2WDvtp8IE4y33dJUlxvkdjSRud6KmJ6/2u54KJ6kfhzKApTM34xx2GMED3AsQE9lpLmE2lF4Jh12Tad7xHlx5vg2XaWpVbaU6CBIK/n/BKyTqBhNZyuLrZixrxRlmbJbqwNbCmj80T82IZQeagDAbj9ndijCOUUGWDfIBCUYv6VA46Z9qsFmAeKGjjwUWNMa0L/KAKhFzHUiRDfJyJ7hrymmPhIZrlsO3oWRcE4kCHtGzkYRi/KqOyv4VHAHFVUmVPB/lz4HyZgKbDx3dEvIwQm66NjR4ty0IAaCuwfeyJAE4YF/KhX8vu/QscokjnDargvnxgZLJ4HsRezAQVqH8drA5JA8r/5xHuSCFXrRNnrizaO5rn2VlJq4TWTwrViY9aNSTkctU68Z/VhYmaLrhfpWHyH2+JF7i4RQIa88xZh7pVBtr6vSs2EezzflcOyUFNEgCuGVqHYOw+jnCCAgr/BksYhAxRkDJoCKah13ZrqTfqLAQPJeuG46g8zBeEdFCd6v9T+glN1qKHM/o7koDQdGmGHcIMia2BM83om71zpSNCngrO/gfiHDd3DjV00xIsaF2G1aLjn+uMxibiTau9GRYrChvbs0unmFMtEiMJnREI6nsVtZT7IEL2CnBQV+3iKN3HAnjiK6NE82+riDejpVTIlqwFsrACyXl1PYNvpy5ezac6OLeJrF+GGxDhXT0ZZXm8tjJ0QPdhGD3amVAhID1BAuO1ko/5JOUAeseMjyjHAyF45ubACtH3ZvJMOHYOZ+xsnLU6epcJutt9/ggTDfHzgYRFAjIE3061Ie/IZVszHmWKWM3XzjcOSHL63S+TAGA5oBkFWjwM22Hr+CDsZne/oysSE97WG5EugiuQECLE3r/QuDUlDdV/kBTrUNAiwM0O8vEw4zqwB0BS0iLXYFh8cu7pAJxOsiVsD3I1FgOehvJP4e3fOpBrww9ubgelao0PGgQP8gPsDYTQ2x0LuK0ZHjqcz28kypahaaAqwCnLkeZ8pakzDNkjvszN+A4WoBLkK2OpJrM8Sndp8E5FTkDR1B/CghQecRwRDtK27g7YIrMNR2ZRCphVmB3NocRN7U9qWSvmn3jjw3vY1W6M6Jfl6bP4H0fQJ5HdjLXmKWrTR5a3b9aaZn43rD0hFV0ltRjmd9RXq8tSEq4v2NVYmwHlh7s5H2SVVdZNwieleXzRLbABB/WasyP63+94K8Yaz0ukzzpZZ5jSWN5YBsznb8cR3eKhzUFHT/HfWaeKL2vV/Lsjxteuxh21buu/YHg1yIWjrEnj8PwK5sTsV/EPBILJC277g+3T6cgaOznnL8MaC4Oyyw/hqQDANSJKBwy10qCF2kvdyGMO4nXF18rUTJEQGU/XksBvODqZac/bgPaCRzbv2evRVn5FhisXhNqNE9J0nYEUpuUaPt5sarcCtSL8ly/xT0rnp40RnpZddURbI4n59IxFU8+gVJ9yTb6aRgKVwNRjlerYkC8rwdkB7a1e1ooLT0L91tqu1aaV/mFtNsLxpWJKObrpiZHAf+C+XOVDT89n0J1ZudHhOvE1abNAzus+oXlkHbchCETCUMjImscwBa6AErdl+cGoJtaruA34KcpuVB0lOStUj6QdbrHcFOVNbmjlCqKAOQwWYKMqM9cm0bVBi2IBWbL5Ms52kEkws2c6qAPKWhMF2c6hXJYnRSoLtQBX/J3RuOU69hKhzmassVRPyLmkS/TArr1zdFUQYuc9OsAGT2u+ncGbfgJYQX1mHylniFwITViYUjLtD1xiG6mhuEqMpaFaIdOW6hQhU9AyAem3W0FTbxpedjAz5nnCT2I2EwWG4sDfqCwAvy2At+P6URrquknMvPDqqKo4XDfJekc/0TBvIVO8pt8O9hRSuggO+V9Dw346crew8tcnTOflKplcCOYJlnWBwlo9GxesdNP7Dw3HsCSwWb9zYi9eAex7p7ryfRU0LWVYoeM5N608102DnJTjtINNOVpO2dlbUByDo61tCoPZEV+KzWM/qLJeqfoZtPK7eFugaUFiG19ppZv7R2VHQtPvM/gqkRgnv7b/yjrFipbcTXJ3uA0Mgzj+2Bko2iJyjwBGr+fqLV6joO9iCWn6ks0m13nd5f4DUMktk5+E2uvsE3VDYe8EMWhtn1hFBfQpn56EWiuxC2l1/xJx603FfK5DGuoq4plL32e+GqGeqtrwkUkLZRYNO9zpeT1lCkk7Au+oQ4fR2dHciaXLcRJxtVQqYkN7KaFDVd9YLo0PGgQQ4gPsDYbiYsI8DT14ftxLQPKyyPYQHY4rYxIW7IGvQ4YsrBMjAXeIPwQWeyHRIVMHtbH27WlJSIzukdtWplL2ArwS8zSG6JHcVoeNNHw05BpMApJKg8AVWxhNzkDdnnSh8EyObFqtXl+ios46ZqRE1ZncSuzvDmEIQ4CTe+ArUg9475NigPNfoU/LU0LzZ04Lw2Lz+lobv4X6srX2ReNL8O6Wqiik4gSK+e76QoiiIHoYjG+8MsUuSsDtFhAVXDQtFcQSH76+txxSZo80BD1HacV7frsU8/v+c/rzFAU6xi0TjAxBI7p9cKDUA1Ovm4cE7Akgdh2sDqWaiwVrzwLoS5OaMQwhAPO/fydNPEoFj5vE4ZD8a886gFPByHHjUviF2tKhD3mtz1UnPI5x3fWiauJAZ0yELVPqY+GMnmvtcfwx0EBJhuCV4hWghqGMhxYEZzX5wkSoe0Kgkj0frBuf1EIjTyQMMwRuzy7GrjntBOWfLqOxL1dKKdAy3nkUR3EsBFNgAsKdN3pY8pRGlcWLli62LkakxeravgDDyw0zFaM18KIJIioRl/DDi5ZB4KennaZVuAP9ISceq/xEAyHbHdlcKC6OHpehnz24K7cs661pNIzLUPcERkwxcgtH55h86jDw3Y05Bb3qX7u20SJ9iNCDrQlZ6mZZ6M+pFHTbqQ0vx4ly5Ztanb9TqEyaCAs0YxveNfrZYiCEXv8DOmvtBrjAXr1PLPIfIFbKvNtq7TwppjPz4zzUU45Ae9uSZTFLm5/w6NhibXmCs/yJMa9sv4PhjDhFJPbGvYLPBcZ83Q0E4lcUDWvHufG3ORT6OJATwA/jqYC5T1CwLYaIKy2n9T0UOpmG8PUWSgWIRNt0fUaf4CjepQdlGlI1QV31mquGC1JfWdn0Seugis0G1JZatYXX1qV2jFOFF95JMS9ms/6hK/YRTjM+sgUv+5o064CEPkrDNXOithW/Nb35wtlbI2mMl95IRoOIliDPq6RpERYg4VBTal9at1mXNf6IwNPv7scEv7utxsd4UZq8VAu6Xt3t1Ye4iPOA/bjogeLJFW+3u7i6AqxHKDiPam5rd4b93HwDg5npCvazDzll5ek9Z39o8W67nPO4egmuZISFj8N7DKqPE9HvRJJjdxBV7zWwHpOY37rVcQjdutwA1OCYbudo8qj0Cc+BvSCZovLg9jBlsv3LWQQVpxzfgR+E0cvdc7hNdZOI2B9EvCghVzeHDBa+GuQq4wo99ga3Q5SMvRcwvzTJfwIc6xiVk/s0BCL/B4aU4o0PGgQR0gPsDYYrCGl9FzBA+Qy7Ub93swJNzTg7jzpeZxroE2VQY+/Jb18SM1T7hvEeeL7ZxXuy6NdGp5ERo21bMB7/diUwwZ0mDc86z85+r8Yid8XEH9qR5BoV7vz12d8UGUyweyhTdtghHizg4efmAl4Wk4WmasbjKW3vfWGkpf8VUuweN4ajA6KOH2TKlTyB/6IdneERFtf3LeNbQn+/j3KIibM/3h3t/4NcuMjj5f4Yb7Pi/IWX8A8ciWdiH3nyxNO82TZfiAl2oBteXhWHKHLCz+k4KvFxyxzQ/NDJEAfkfv65/9oO+cV28/NVtHJIAnhjr5kdCF/OKUC2ZF7GwQCXXI7PBaCRRf2gtGNDHA0+9+5QRYptwtr6Cm/ltegYd9iX7Y9BvEZ/AYXO1dY0ooakvf6m/NvbwgU39K22hAL/yUEpthsJhvDmkUuxaHH3kJLhLmRIWr9Q0gqp+lnFQYijCZs/0MkWm/gPwEfo5gCyViCOc2wqXLlbhubi5wmqjRTKTXg6IRlBZNgjIpefQwkhQgKBLD/uLrV7zrRwOuDsHB3W5+N9jUpf6pqw5bCntCdFT6WeUhhTfnC9LNv/Pxu6Lfx3wYy4jMk+SI8oEBepRC/w6FTqsIv69bPtF99+OWlkrd6jyShkFa/rc74w3WQOhiQmiDQnxvUdAqVfaHaFkAxWHQYKzaDiZJRBuasxGuD6mzb62Ci46RQQul1xp6WKXw1+AM+ndf0nQynjmxVETamkYknBIVznqFsNgJX3VSSXarIKKSJ9NQCEgmz+A3AsFnDXqeG7p4ksQNdjMLMtH45a+o7aGrm5WIO2RL2b+nbTIOSo0p5aOgMEbigPcvsuKexj6qWG8JSseKJlgik2a36nOAhRVbhfrewBpNczI5WImEWcXxIRGGP6aorLhL4dAA2HoRWJZ1lyMb9AdLk9Or+cGnEX3dK5FPNh45WVEqLLPj7mMDFTgbopuWYLpPhLZy51cY2Ml5uYwmHqntYqKYjwx5ue/ixJPSnDL1wmTL+KZsXZtahOJQzak6cMVNZyNFa7zhRxwlUsdrJkxOnaySOK8EUsQhGQhHgd09RDmtHoT6XAFXXl8f36wuap7ig1Gu1TGr6nFTqTmb08y5ToTVX4wQ6gGa6cpPMypoONky19RY0epRMtoA4bbs2RDrB3DYEXPUN+7Ydl+qmYRSlpIjh0zMOf4yp8uT0YgIBDt8vBDJCyJbWg4r79Q2yo3FHKecy1hMVtzvLUgNXc2pKMJ0noRaUoH/FeeVRRvlBvsyuU4X21ro0PGgQSwgPsDYbxvoojjWG06JglAlp0LuYSX/TBOjTQFQXyZ4P2zUto976JI4IIaMmgZStFKoym3jhvPbK4kjyd2w555GKBvQjzLoM8RT+sobJBYhaGc/UG5C+bj7ezCniKrWhjYB9YqGWTMgQh3nQThO9pwiWsOaFg/qlqmE7louWf082TsL5IFHAR78KQA3i589RkOyIxPZn5qtAkbcdvLsWvqKFU/CiWKokyTGj8Ky+Lv2CEFSDhj3PDmdVQjLTyErn4FGCzh/4JZNwSbSI6a9IY/zUCnCr15X7AdKXlFKvowbbikIn/2voRCXm03MtnV8BCcMfHTULpPCjxbhKOGHvh8Gu5/pTKWG3MFkh5uOXHKni06uA084uD1YBHpda4ZWjuk5vVHJbnvPQt/5GRoMDs3btRc5FJIanvNySSf3Nupv0WuhJdhuBd1BuYufY3sp33dOAYU6J3TOHTBOaWWXGdSaSWCMGda/M+mb7no2rYE3vnbse8b3yaJJHJkJ9k8IkyM/TlXc0II2DOpArg19cWLMrTznyrmkW0DyiAP/fpFxHhQaUkOerdzftPV44tRnqHfE/BW6KCJt76HO/JULYekSiRep7twhj5lW8nF+ojhnFFxDsUNUbpZbpohqDPhnpSYy3aIsQ/CytyUJVbAh8qRno5ZAjwCh/us7lrc9dwNr9llIQLrEs8LyPSiQX3GlW1PgWlJ1ne9R9g90lnM7ZHe9Z5a9joExhSibN5DwHX5K0WBvj8+cuoAizeBb4zZlLmis4vqRFZeZWrpNlzS3kCkASDQLTjplx86PNDrzlhXj9pUUANNVCdu2W6H91FDUVd5PGTIgM4TpmEAkyH4j8yavEi/CWG4lMPNfL2TPfO1qmBVFePw71V5RaZyMfpTTBiTMEJtYYtqsr6TrUMdzmrdnQXXPjJt5NBOsb32wH/Rna94NFRJ6dXORt0ABYD596OAoTo3Wnw4O8ChSe9ugqZ3KiEpCBLgqIXRs3zIrKFSy+q8kvsF9rPZpcbHl+6G7ait98vNGnEX6lrNVyLb6Bf10z05QBHgJUKg2v+0eKH2yxiu1bjx4x/K/KnjpY4DsTJpdUR3eTXVAhUxoIYkgGh1ctc3K0htHsuZm01e9xbruxAk/u9yPnwa37SsUvq3HaI8DtkCEnh6mIhbf7MfP5UiIAglNOVg+bsy4JUEhN1QO2vvGb5XPjgD9A/jisa8mpsou4GxZA55wVP00/E/Mf1ONd7N/gPu17hsNc9peqjIqJWhLeHFWwSg1IABEMy98pdAZmvVo0PGgQTsgPsDYbiR3qYZGzsf4IvmRYCVeO+HM1v9mtPcyGZ2vC86HjE+nGWbzh6DAdpUUA0DjxRbbN3xMBAS9yIo120OhpnFXXItLhvTAGJwo0gci+B1xao6D0zPYs+UyVXAY1pQoMbPO5lHBW53my0V/GyNReHQ1U3MbY8l6DmUs7Ck9l+FPFuUFs7k8pRd33J0BpR1ERvI9QEofXgWfkHPaIsEmiFgE8nOt+i0gBsxOJMlhBpLrrvX7izn7joyywd0aBKRuQmZ5JXy5U5kM610j96a4HM6v28B0tjXK6iVNiC6pLNzLqzn7wKesxR31nkAhLwKxenftO4nLHr8r+BD+3pHmSCIH69TFkBXGiCIoao426BNPOc3qK6jth53kQg7VkfDLForVhI6OmthbBlA362KNUFFyspWUJGENwoTMAxQUbdxFGJhk+EyiUNjr7kNtVyr3ZQPDSj5nCK0F4bnT76PdibRQaJNBoHJUyrgIHoGOJugYvT1cj0XOgiJN8xbKUaVHobrGRiMhtFKYk1bcNhgGh94+5ug7cVPxSD086zDf/VCpyyvNvGXNA6jo+kOBqXOpfvkG9yqT6ZN8pWVVax8NCPx4DpaRB7/W9ubsR28biTLgFDopOe/LQsa8v5LjOWfjIeMuqqxdAd7Lz2BMcyDUsUSRq+IuYreR6T/MGu0fU9oJLCr5Cwv08HCgSsRsnTXXqL45/AZ4smtKSwCqTxP4orw/RM6aBCzk/0VQ1TFYTW1z4PVKEuqEu7Qywn5RUYGdn8uwR35XWzSefNh/Yjb60XVbbUr91wEV5PEeGRA+zDgkA9i+AXLzaOSjjNg4QwGw0RmifUCjPhocCQb65aJN6P79GGBJE7usPGlWiEndmTyJ4/75WIolWpx30L9O9m8HbgGKhAp0v9n+H7kwNVzUbdGipGnGdtTr9h1QPmM2egak+F6qc04DDAtAcnBplu6E1xGOu1hnMUgtqW6fwTqMXCXYa5HmEE+lvYsFkEMVLp6f85qI0ieBhdSVSqbSrMOBtovBmGRhTuh31nBMWnF1CEcQ9e2Jp59WfY2KKmgSeBWx7oMYNj9zEkHYZZniM7l9xgshoU+1TcM0eoX6sAhNJ9LJ7Bt4K4m2k2DSSaoQF/yMaDlnuY1Afo7/eCcuuOXCC7rlWzJE2Qb+BCDEU1HnPh9GthwPrZvm2ZDeunr+ib91wXdsWAfqC9yrNllVx+hDNT97Hx1/ds/hGozfBedNgS/3XULWDUfGVNYbTP2beRCPTeuize93zyAf67eyIS2oUnDo0PGgQUogPsDYbZNfJJsKWMfaQWZ/HkwC5SOFDjX7amQDcHtPLDjKreo4sWF5cECT/frZbnJ3icAhPUvQYghmPEmZSJnHGgArwoWnoZw9l4rw85xS3pVHg6yfdrSn89tqBoRV4whmFeLCsPhsHnsPE2FklJRiCQiHu70ThZKq34FL7q1x0i3j21zS+uVbkPG6O+PSuLHn63PYYUd5c/jEPJLBPD5gUY0qsHQHwz7GXhcaE3MIrcEAfXVcxLk1QWW+qoJSRDtwu5VibbvpMwoXIS8EgrO/xdfl0NXQj0EB0pgvyaS0YzHAE4m9wK8bHAHoNY61D3wzJLLFD9Qz+ICrxpU8tQPp3Ud7DRD4wZcHPeVXckzMPpRmIWa6nNS9lIbONoB6NUHPNMXGrm9CMVjQdrb0ZYy6kIIHPmM0EaRrF6UMRBn/POWVV1hiqQacSc+nWk2oQ4VPM85LJEPJGk2RZcrwrzzyLJNT7Y6xDCokQLRIi2Y3kXGBrrb6TRQOZPR0fcUfu8n/VLztRKG27gKa4f6iWemp+wasmCoxIagU4IPVnwpCST9xSH8K2ZJAykvFynBnL4K2+JUm7A71G1PwaxWVMwmbp5xGFPlCGrwtfPOqA5vbujon7fyFiS0cXRhXkV3rQLRmlZp7tJEpxXccneEyK0hZ87oaM0ACFXcTXgup+1x9dnTuJGy+jIdItDOZcFiCZVDbOQZlhMxWOCrtNYkZg/j8c2cTdME2f6w2Zub/h1L0hGgUcPBh9+2IX8mYzlEISgnUIQnBcr8VS4NbKPArnxXdr4RQqmT67WtJsr5u58lIr0A7Vp1UJdtrlc4EVf3qiq7pIEJpfNlN6XxGKPNl8ZIvQVqyGG2WISxAAwSi9F9m9hRjdmOtB+dlwVj96cRdz/Gat2LxeiP88VEAeD/TgdsuH9q+ZmEPa0mpX2s7Tmd0Q0FsFbXIBx/cJGQVADLhx7ffF36otJbqqISILcIZ1050l2Sh0VUt9dI+2/ERVClK2FFO1FGzt0lsa3qtqXB3CIbzTQM3LazBATJP16mDa5r3TyKYT4Om6+6NJUlrojjjlS5+VKQFZ5bm2X2eoc31l/Vnb7QIj3ILVN7YGPf7TAkBsI0cCfTrHZ/eyOYxGlQg1+6lrF9blTzEIZ1bNH1nUJXW4QuwHy3tElMMnNF6ZwWQfyepX1rdOTEisKIKnq2qQK6HMVyPDOfutHg3by90huKuCGtft0guYONRMHNkhMd6dBDoSdpxQa9F1FNSy7Ki/17pGXNCCgxF9CkkSRgCKE4PCO3o0PGgQVkgPsDYbi1f5UK7RKG7822dmFpkaQF9z9sb4imjP62kgjvzaKF1MU2ZYcCAZF3sRfXcISrnQPG2s1xec4xJx4NVDugsOOOJUC60vyWqvKqI0+3fDEiRiSvRJSAHu2H9EmIq8JiMBQ2Q5P9foXdJvaPy2H13WuW2xDX9JL9s8tPk/k17cgZYaKmGpzD3nZ+sHkYrj6lL+cfZ+JwAl0xzQSV4Ek6V/1tQN5MH8H9gysJORyDlGIGD92xSgsmhBtpSGt1OVycRo2X6rjB3+z9kxW3/SR0SzlJ9/0MeirCPUDO1hTFp3ICZl84Pv+bF98fApqa/rt1fpPY94ibPiXo3d9u8Ik12DPpMtgi5kpuPe2LdGWyJlTbWsMIYmabZhAg9ze8Ek8cvA/uHcC1UBgpG64CdWBIzPZVft/ObsqjGNy8MGPH4pdhOvsFYhWeXYq6uVmMRQxdl2MQe6yr30aHWpeoWUjFC7ujsOvPWmyxOPCEk5X8tcWGjmdAlAUvxdBuBQ9tjcKS67suoV9RnHmBQaqAy3M8AbhZkJJq0qJNEo0vch6hp6iTTNqpmeGdGCcsFRF/qMeX4il5my5/nvJHsmW231+6rtlraxBvLruVecuypOXBEX3Ayt9f/AXD/5OGoo1J+E0+RV+lO3ERgq6qNvAQEMvs+6lIh4YoDlwBBbZzUaoQl6iv8tFK6SvLwgOsVUcBuRSqIAjSSf8tFiUzk1nH0/pKsY9TulLtOYyqNNlWuek9N6jmUeB4+w39oTrOd1alntxtmf9l4fPNLqgSffqRtofkQhQ/W9mrlw0rwYFzHHKCfJY7p+geeJwFwgXmlrwh7sosw2h+6/N+zo/dqs5x4hXSsG/S58oEZgi0uSzIstiz8mqgI1UhJanB4WYbhzMB3SRusAQkRTWhROOJuz9ZHvPxuVJX7xbWMShf2UsF4naSGiwLSaC9Ef1wcetQLlsuaKENo6zgPO3ZJ8JGUyRoEoMlrEWGia2fGmpUvoV6ZZB/Z9my0M3UR0BlZ4pjfUUwuoXlONfMlaEfAx9Iu9SNcLZ5zom5wT0KAijrtXkFJGRB5wTYu3T/dD2HmHeZGGeaPDIUv3PNMSC6mUyQ7/BsG39faaoaLgFo6fdzDKNHR/mwpO+RrzSSknEQObUNpXvofaXZ/6QVIo6derY7nGUDB3KRwXROcWdC0IzMkBFuiswKMrWmYitAbEZFhFu2uNqoWEO2uRjqQ20K7j02aKqSFswxkr/Kl2OvPMZAXI1fmHLqPGP6rxosECSzsxuPhBPDYS2ko0PGgQWggPsDYbiUxgP7StdmQkHAcoR+OGooBIdXCwq3Qepcjw0i8/7T5fxlrXoL0NevLi1uvAB1cioYTTixSJmq9qPR11VGyQL0O+9QcGKIGMuPlFir6uVm6wuD54g2GfVVGXHIzub8r6jc4CbcnFZpI+faTsLbdQ6Ato14PjOUpgRdvdQ8uRV2CP6Q9QkSqnCKrmw6G1iXiMjcKuM5wHG9oW16FKtq2YQhwBk0BUjyhtGg2agsHfBKU1cJ19Cev3bneWDlTG5AP0Ybf/QGg6e9PCV1WpQrZgMfpqLhg7fdyOdFZj0BB6t8GjoD24pB18+CP0iAeyHjhsqOhmn4UsAD0D50ePnVdbXIPceGGUN3WK5/mSK93KVhkiCvhdYllwXHW2tXz7B16IkWfLQyKHwVx9tFEAaSuapXPWHevgoQuLx+v7tiwWdhh7XUMEVM2CEITNZrDQ1hWGvmOUQe/SCekNAM39DAyFZXH8sp6A8NQYCOyDTohiDLNnVkmQ1RZW7CVF0GhOOB118GAaUueeuzTJ0kEVTPPRjqebA1p+W/hhv9SZ0BZ2XbXSf1uZ7Tb90PBW0DbuXSLzrhsdpp7CglytkYYNwfJadMsWHptD5sjhQfc0KAP9ayRuQ9y/7jdqiUaQoMnz28dekIbr64nCVG3ub8tzJGcpT01PWN9iYUIAHWQxs3Cp4qr81+ncls1Hi3n+jo3jflXRgoJZiG53o6lmka++Uxzr4yd/VfboY9FTUf33iIvYrz9k82Zb7gysFje1nmrrLIFUxn+EvXbbAcXWfHeRgFoxnJ+d2RO0HTzDvPIITrkN0EfZmGkjYIBWhBgyYvnyXWaQiDIb40E4UN/8Jh+q4jpGG4hQv4WD2iU6smhBrWm7/b5ghrN9G+4Zfa2nM9wkhK4/xA+jKILYfjCHNraL4QLqdaZNCovZ9LCvWFaQWrNQfm1+f0auSHHCgFnXRebrAq1CareCztDpvh3ItZGxRRWcffSRk1YzasEeAuO8qqcRlQwGslSMSGcJbYNfw2cXsh4KVsDRlemDSryrW9Ngj1vc7oSulRatJ7JZhv2b9gFoHL1LeHpvCt8r3RKm3OAgl0qIUgNXbgV0hjz+6klybZeUUw/oibKT4iyyrH+ZfGxCcHJEMbSUsTbDJoKCy2HYWFQmusGmIuizttnxaNtxa9g36L3b7zjEm4oG+A4EPL5luUmU1Wmji4FW1+J2ANxb1MPNGLLzz/8svAMnirP7jIMYYX6uc9YGmN+Lb6996xZXEZ4FxScX9RpEEA0eZGv3Qlo0PGgQXcgPsDYbgNb5RRxByYv8Js1vKk8JCTbacm8h7CObvmkf0kNnldFsybK2YPlUHk/TXFeYfziVgXdGb5dbB2Op4V/zyngqYPOyRhZXROheTpyg3rZKtqL8WydSDq1FVXTccLfH9YktIlREG3RpczwC8gF1cbgLL57m2VxBm1QwegRSi1NBeSThAIjvPtcw2sLC4atnLlryl4kwa+J3B7f69wLFOg4CC2cR4SigN79LFhOzLFqYJjprj7Ym0GtaWqpR9Rs2alD1hU9SaiC92fGtifsqaLZquBUPgxuADN+r5xtjOohs2WQdz8S7qrCmFLPxDP6fc7F/twn+7OOYlzX0hTmmkW9xIX6oO2V2es/kGt8iUfXCo0hTMtN17zyrVwVR7bKMBq1Rm8XKDymjbgHl3xyUTMzKEoQ09mS/D/25y+81QG+CdhlBxQOhfYvziicfItcuq71xepTuQiCsWHYWKnxuxN5t8x6fSuxt5P6IqQ0VjWoWq8EBeQb2Mk+kqHuqtTNROYtHoj0veVCjD4bOU99jwUZqmnoFW97vor9dpkn1LkJT+yuai6l2qGCbBIM+AbDb7Dxt1MAj0FMNIyO+mmg2CzkKS77Vr0/PidDF3dadfwdzPXMf47JcyZOFzbjPHIzgKdViWW2cyaAMBchcYbK2YkmHkecLbih8oD71pysJ8o068aWhJhk6sHoAbWvNAi8smlE6OZOOeqdNZpvoY6Gpo/0l31SCc8HB4sY/tHnx34cswrdRjfdMWSK73WvcXzsL8LIPkR0hFmkC5GDWfOQKvdLH/T3zMU9Zg8Os3ypoSfr3/NgTT95JTmoZC4Ed5lOWd2Fh/EBOuOPqL+3NZ9KNKiaWGK8yJrqezByDjH0DJ0sb0kZBKhcTc/KSI7AroiSbflOR0Z1QD7PJ+mGf8kaAUIONSiitBneXKBAoz7Z2cQfVuEyt6xdFJtpdwMws5IMEJNcnBJ6UsJE0ym9aS42BxA8pDVu8X7jZTOqSAUyUp30ngGxIqg6tS4CwwmsBhNnw++4ro8yOOZgAPGdhgzSfLWCv9sgoWk0v55Uu0rxo6XVAmorA3Q8m/Z1Vgf3azSOQ7FbcZaBhEVAhcVfEQ33juGri/v1TzpKYU4Q89uImqKSppkvNaKsXO2irLhwqj/hlgcCu4BB6Pagb+2k+4DHv0ngY4IM8N9Hw8ViWUF1rrF7LQc14rYEc42iViRLBEiV5iJ1bBcfC8qpi1Rqq47j6RnCV6Q1CmYEfQ65RGQr+otymrlfQ6gDI2jH/rgmI/TuKTj"
+    audio_byte = base64.b64decode(audio_str.split(",")[1])
+    audio_byte = base64.b64decode(audio_str)
+    audio_content = BytesIO(audio_byte)
     audio_content.seek(0)
     audio_data = audio_content.read()
-
     return await speech_to_text.transcribe(audio_data=audio_data)
 
 
-async def download_media(media_id: str) -> bytes:
-    """Download media from WhatsApp."""
-    media_metadata_url = f"https://graph.facebook.com/v21.0/{media_id}"
-    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
-
-    with httpx.AsyncClient() as client:
-        metadata_response = client.get(media_metadata_url, headers)
-        metadata_response.raise_for_status()
-        metadata = metadata_response.json()
-        media_response = await client.get(metadata.get("url"), headers)
-        media_response.raise_for_status()
-        return media_response.content
-
-
-async def send_response(from_number: str, response_text: str, message_type: str = "text", media_content: bytes = None):
-    """Send response to user via WhatsApp API."""
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json",
-    }
-
-    if message_type in ["audio", "image"]:
-        try:
-            mime_type = "audio/mpeg" if message_type == "audio" else "image/png"
-            media_buffer = BytesIO(media_content)
-            media_id = await upload_media(media_content=media_buffer, mime_type=mime_type)
-            json_data = {
-                "messaging_product": "whatsapp",
-                "to": from_number,
-                "type": message_type,
-                message_type: {"id": media_id},
-            }
-            # Add caption for images
-            if message_type == "image":
-                json_data["image"]["caption"] = response_text
-        except Exception as e:
-            logger.error(f"Media upload failed, falling back to text: {e}")
-            message_type = "text"
-
-        if message_type == "text":
-            json_data = {
-                "messaging_product": "whatsapp",
-                "to": from_number,
-                "type": "text",
-                "text": {"body": response_text},
-            }
-
-        print(headers)
-        print(json_data)
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"https://graph.facebook.com/v21.0/{WHATSAPP_PHONE_NUMBER_ID}/messages",
-                headers=headers,
-                json=json_data,
-            )
-        return response.status_code == 200
-
-
-async def upload_media(media_content: BytesIO, mime_type: str) -> str:
-    """Upload media to WhatsApp servers."""
-    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
-    files = {"file": ("response.mp3", media_content, mime_type)}
-    data = {"messaging_product": "whatsapp", "type": mime_type}
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"https://graph.facebook.com/v21.0/{WHATSAPP_PHONE_NUMBER_ID}/media",
-            headers=headers,
-            files=files,
-            data=data,
-        )
-        result = response.json()
-
-    if "id" not in result:
-        raise Exception("Failed to upload media")
-    return result["id"]
-
-
 app.include_router(router=api_router)
+
+
+# if __name__ == "__main__":
+#     import uvicorn
+#     uvicorn.run(app, host="127.0.0.1", port=8006)
 

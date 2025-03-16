@@ -20,7 +20,7 @@ async def image_node(state: AIAgentState):
     text_to_image_module = get_text_to_image_module()
     scenario = await text_to_image_module.create_scenario(chat_history=state["messages"][-5:])
     os.makedirs(name="generated_images", exist_ok=True)
-    image_path = f"generated_images/image_{str(uuid4())}.png"
+    image_path = f"backend/generated_images/image_{str(uuid4())}.png"
     await text_to_image_module.generate_image(prompt=scenario.image_prompt, output_path=image_path)
 
     # Inject the image prompt information as an AI message
@@ -28,10 +28,10 @@ async def image_node(state: AIAgentState):
         content=f"<image attached by Ava generated from Prompt: {scenario.image_prompt} >"
     )
 
-    updated_messages = state["messages"] + formatted_prompt
+    state["messages"].append(formatted_prompt)
 
-    response = await model.invoke(input={
-        "messages": updated_messages,
+    response = await model.ainvoke(input={
+        "messages": state["messages"],
         "current_activity": schedule_context,
         "memory_context": memory_context,
     }, config=config)

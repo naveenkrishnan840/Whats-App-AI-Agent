@@ -7,10 +7,11 @@ def memory_injection_node(state: AIAgentState):
     memory = get_memory_store()
 
     # Get Relevant memories from vector store
-    content = " ".join([message for message in state["messages"][-3:]])
+    content = " ".join([message.content for message in state["messages"][-3:]])
     memories = memory.get_relevant_memories(content=content)
 
     # Format memories for the character card
     memory_context = memory.format_memories_for_prompt(memories=memories)
 
     return {"memory_context": memory_context}
+

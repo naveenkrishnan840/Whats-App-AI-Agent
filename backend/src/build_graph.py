@@ -45,7 +45,7 @@ def build_graph():
 
     workflow.add_conditional_edges("image_node", should_summarize_conversation)
     workflow.add_conditional_edges("audio_node", should_summarize_conversation)
-    workflow.add_conditional_edges("summarize_conversation_node", END)
+    workflow.add_edge("summarize_conversation_node", END)
 
     return workflow
 

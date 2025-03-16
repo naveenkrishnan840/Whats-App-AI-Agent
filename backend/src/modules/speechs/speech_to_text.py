@@ -3,7 +3,7 @@ import tempfile
 from typing_extensions import Optional
 from groq import Groq
 
-from backend.src import settings
+from backend.src.settings import settings
 
 
 class SpeechToText:
@@ -15,7 +15,7 @@ class SpeechToText:
     def client(self) -> Groq:
         """Get or create Groq client instance using singleton pattern."""
         if self._client is None:
-            self._client = Groq(api_key=settings.GROQ_API_KEY)
+            self._client = Groq()
         return self._client
 
     def transcribe(self, audio_data: bytes):
@@ -42,8 +42,8 @@ class SpeechToText:
                     transcription = self._client.audio.transcriptions.create(file=file, model="whisper-large-v3-turbo",
                                                                              language="en", response_format="text")
 
-                    if transcription:
-                        raise ValueError("Transcription result is empty")
+                    # if transcription:
+                    #     raise ValueError("Transcription result is empty")
 
                 return transcription
             finally:

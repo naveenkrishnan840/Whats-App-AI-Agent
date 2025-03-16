@@ -1,5 +1,7 @@
 import os
+from io import BytesIO
 import base64
+from langchain_groq import ChatGroq
 from typing import Optional, Union
 import logging
 from groq import Groq
@@ -31,7 +33,7 @@ class ImageToText:
     def client(self) -> Groq:
         """Get or create Groq client instance using singleton pattern."""
         if self._client is None:
-            self._client = Groq(api_key=settings.GROQ_API_KEY)
+            self._client = Groq()
         return self._client
 
     async def analyze_image(
@@ -52,19 +54,20 @@ class ImageToText:
         """
         try:
             # Handle file path
-            if isinstance(image_data, str):
-                if not os.path.exists(image_data):
-                    raise ValueError(f"Image file not found: {image_data}")
-                with open(image_data, "rb") as f:
-                    image_bytes = f.read()
-            else:
-                image_bytes = image_data
-
-            if not image_bytes:
-                raise ValueError("Image data cannot be empty")
-
-            # Convert image to base64
-            base64_image = base64.b64encode(image_bytes).decode("utf-8")
+            # if isinstance(image_data, str):
+            #     if not os.path.exists(image_data):
+            #         raise ValueError(f"Image file not found: {image_data}")
+            #     with open(image_data, "rb") as f:
+            #         image_bytes = f.read()
+            # else:
+            #     image_bytes = image_data
+            # image_bytes = BytesIO(base64.b64decode(image_data))
+            # image_bytes.seek(0)
+            # if not image_bytes:
+            #     raise ValueError("Image data cannot be empty")
+            #
+            # # Convert image to base64
+            # base64_image = base64.b64encode(image_bytes).decode("utf-8")
 
             # Default prompt if none provided
             if not prompt:
@@ -79,22 +82,21 @@ class ImageToText:
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
+                                "url": image_data
                             },
                         },
                     ],
                 }
             ]
-
             # Make the API call
             response = self.client.chat.completions.create(
-                model=settings.ITT_MODEL_NAME,
+                model=os.getenv("ITT_MODEL_NAME"),
                 messages=messages,
                 max_tokens=1000,
             )
 
-            if not response.choices:
-                raise ImageToTextError("No response received from the vision model")
+            # if not response.choices:
+            #     raise ImageToTextError("No response received from the vision model")
 
             description = response.choices[0].message.content
             self.logger.info(f"Generated image description: {description}")

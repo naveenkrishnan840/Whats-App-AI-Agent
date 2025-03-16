@@ -7,6 +7,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from datetime import datetime
 
+from backend.src.settings import settings
+
 
 @dataclasses.dataclass
 class Memory:
@@ -41,8 +43,11 @@ class VectorStore:
     def __init__(self):
         if not self._initialized:
             self.embedding_model = SentenceTransformer(model_name_or_path=self.SENTENCE_TRANSFORMERS_NAME)
-            self.client = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY"))
+            self.client = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY"),
+                                       check_compatibility=False)
             self._initialized = True
+            if not self.check_client_collections():
+                self.create_collections()
 
     def check_client_collections(self):
         """Check if the memory collection exists."""
@@ -62,17 +67,14 @@ class VectorStore:
         :param k:
         :return: List of the Memory Objects
         """
-        if self.check_client_collections():
-            return []
+        # if self.check_client_collections():
+        #     return []
         query_vector = self.embedding_model.encode(sentences=query)
         results = self.client.query_points(collection_name=self.COLLECTION_NAME, query=query_vector, limit=k)
 
-        return ([
-                Memory(text=hit.payload["text"],
-                       metadata={k: v for k, v in hit.payload.items() if k != "text"}, score=hit.score)
-                for hit in results
-            ]
-        )
+        return ([Memory(text=hit.payload["text"],
+                        metadata={k: v for k, v in hit.payload.items() if k != "text"}, score=hit.score)
+                 for hit in results.points])
 
     def find_similar_memories(self, text: str) -> Optional[Memory]:
         """
@@ -91,8 +93,6 @@ class VectorStore:
         :param metadata:
         :return:
         """
-        if not self.check_client_collections():
-            self.create_collections()
 
         memories_ids = self.find_similar_memories(text=query)
         if memories_ids and memories_ids.id:

@@ -19,9 +19,9 @@ async def audio_node(state: AIAgentState):
         "messages": state["messages"],
         "memory_context": memory_context,
         "current_activity": current_activity
-    })
+    }, config=config)
 
     audio_bytes = await text_to_speech_module.synthesize(response)
 
-    return {"messages": response, "audio_bytes": audio_bytes}
+    return {"messages": response, "audio_buffer": audio_bytes}
 
