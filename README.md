@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" />
   <img src="https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black" />
 
-  <h3>Your AI Co-pilot for Airbus Aircraft Customer Chat Bot 🚀</h3>
+  <h3>Your AI Co-pilot for What's App AI agents Chat Bot 🚀</h3>
 
   <p align="center">
     <b>Autonomous Flight Booking Agent | Hostel Booking Agent | Car Rental Agent | Excursion Booking Agent | Customer Policy Information Retrieval </b>
