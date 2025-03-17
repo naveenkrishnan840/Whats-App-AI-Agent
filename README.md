@@ -29,7 +29,7 @@
 </div>
 
 # Overview
-<b>Ava’s Bot</b> is a smart, multi-agent system designed to provide a seamless, efficient, and personalized experience for users interacting via WhatsApp. With the ability to handle text, images, and audio, Ava’s Bot leverages AI-powered NLP, memory management, and multimodal processing to deliver context-aware, human-like conversations.
+<b>Ava’s Bot</b> is a smart, multi-agent system designed to provide a seamless, efficient, and personalized experience for users interacting via WhatsApp. With the ability to handle text, images, and audio, Ava’s Bot leverages AI-powered NLP, memory management to deliver context-aware, human-like conversations.
 
 By integrating SQLite for short-term memory, Qdrant for long-term memory, and real-time workflow automation, Ava’s Bot ensures intelligent decision-making while enhancing user interactions. The bot can process text-to-text, text-to-image, image-to-text, text-to-audio, and audio-to-text requests, making it a powerful tool for advanced conversational AI applications.
 
@@ -48,93 +48,55 @@ Embrace the future of AI-driven conversations and experience the next evolution 
   ### 1. Memory Extraction
   The Memory Extraction is used to store chat information for both ava's and user chat to get seemless experiences.
 #### Capabilities:
-  - Understanding Context – Extracts key details from user conversations to maintain contextual awareness.
-  - Long-Term Memory – Utilizes Qdrant (vector database) to store current conversations and enhance personalized interactions over time.
-  - Intelligent Prioritization – Identifies and classifies important information, ensuring relevant memories are stored while filtering out unnecessary data.
-  - Efficient Retrieval – Enables Ava’s Bot to remember user preferences, past queries, and ongoing tasks, leading to smoother, more natural conversations.
-  - Multi-Modal Memory Processing – Extracts meaningful insights from text, images, and audio, allowing Ava’s Bot to recall and reference past interactions across different formats.
+  - **Understanding Context** – Extracts key details from user conversations to maintain contextual awareness.
+  - **Long-Term Memory** – Utilizes Qdrant (vector database) to store current conversations and enhance personalized interactions over time.
+  - **Intelligent Prioritization** – Identifies and classifies important information, ensuring relevant memories are stored while filtering out unnecessary data.
+  - **Efficient Retrieval** – Enables Ava’s Bot to remember user preferences, past queries, and ongoing tasks, leading to smoother, more natural conversations.
+  - **Multi-Modal Memory Processing** – Extracts meaningful insights from text, images, and audio, allowing Ava’s Bot to recall and reference past interactions across different formats.
 
 ### 2. Memory Injection
   The Flights Assistant is responsible for assisting users with flight bookings, availability checks, and flight-related queries.
 
 #### Capabilities:
-  - *Context-Aware Responses* – Retrieves relevant past conversations from SQLite (short-term memory) or Qdrant (long-term memory) to provide seamless, intelligent replies.
-  - Personalized Interactions – Injects stored knowledge into conversations, ensuring Ava’s Bot remembers user preferences, past questions, and important details.
-  - Multi-Modal Integration – Injects relevant text, image, and audio-based memory, allowing natural continuity across different conversation formats.
-  - Dynamic Memory Retrieval – Uses AI-driven logic to decide when and what memory should be injected, preventing unnecessary or outdated responses.
-  - Enhancing User Experience – Eliminates repetitive questioning by recalling past interactions, making conversations fluid and engaging.
-  - Workflow Optimization – Works alongside the Memory Extraction and Workflow Decision agents to ensure the right information is used at the right time.
-  - Adaptive Learning – Continuously updates and refines memory based on new user inputs, improving response accuracy over time.
-  - Efficient Query Processing – Uses vector search (Qdrant) to find the most relevant stored memories and integrate them into conversations in real-time.
-##### Tools:
-  - Search: Queries available flights from the database based on user input (e.g., departure date, source, and destination).
-  - Book: Allows flight booking by processing user preferences and providing confirmation details.
-  - Update: Facilitates modification of flight bookings, such as changing travel dates, or seat preferences.
-  - Cancel: Manages cancellation of flight bookings and provides options to the user, including refund or rebooking.
-### 3. Car Rental Assistant
-  The Car Rental Assistant handles car rental searches, bookings, and changes related to rental vehicles.
+  - **Context-Aware Responses** – Retrieves relevant past conversations from SQLite (short-term memory) or Qdrant (long-term memory) to provide seamless, intelligent replies.
+  - **Personalized Interactions** – Injects stored knowledge into conversations, ensuring Ava’s Bot remembers user preferences, past questions, and important details.
+  - **Multi-Modal Integration** – Injects relevant text, image, and audio-based memory, allowing natural continuity across different conversation formats.
+  - **Dynamic Memory Retrieval** – Uses AI-driven logic to decide when and what memory should be injected, preventing unnecessary or outdated responses.
+  - **Enhancing User Experience** – Eliminates repetitive questioning by recalling past interactions, making conversations fluid and engaging.
+  - **Workflow Optimization** – Works alongside the Memory Extraction and Workflow Decision agents to ensure the right information is used at the right time.
+  - **Adaptive Learning** – Continuously updates and refines memory based on new user inputs, improving response accuracy over time.
+  - **Efficient Query Processing** – Uses vector search (Qdrant) to find the most relevant stored memories and integ
+    
+### 3. Workflow Router
+  The workflow router is a decision-making system determines whether to process text, images, or audio. The system dynamically executes the right AI model for the given input.
 
 #### Capabilities:
-  1. Car Rental Search: Retrieves available car rental options based on user preferences and location.
-     - Example:
-         - Europcar (Economy) in Basel from 2024-04-14 to 2024-04-11.
-         - Avis (Luxury) in Basel from 2024-04-10 to 2024-04-20.
-         - Hertz (Midsize) in Zurich from 2024-04-10 to 2024-04-07.
-         - Sixt (SUV) in Bern from 2024-04-20 to 2024-04-26.
-  2. Car Rental Booking: Facilitates car rental booking based on available options, allowing users to select vehicle type, pickup/dropoff locations, and rental dates.
-  3. Car Rental Update: Users can request changes to an existing car rental, such as altering the rental period or car type.
-  4. Car Rental Cancellation: Provides the ability to cancel a car rental reservation, either entirely or for specific dates.
-##### Tools:
-  1. Search: Allows users to search for car rental availability based on location, vehicle type, and rental dates.
-  2. Book: Facilitates car rental bookings, ensuring availability and confirming reservation details.
-  3. Update: Manages changes to existing reservations, such as modifying pickup dates or vehicle categories.
-  4. Cancel: Handles cancellations for car rental bookings and initiates refund processes when applicable.
-
-### 4. Hotel Assistant
-  The Hotel Assistant helps users with hotel searches, availability, bookings, and modifications.
+  - **Task Decision Engine** – Determines whether the input is text, image, or audio and routes it to the appropriate processing pipeline.
+  - **Seamless Multi-Modal Handling** – Directs text queries to NLP models, images to vision models, and audio to speech processing for efficient execution.
+  - **Real-Time Processing** – Ensures low-latency routing, making decisions instantly to provide quick responses.
+  - **Memory Integration** – Works alongside Memory Extraction & Injection to enhance responses with stored knowledge.
+  - **Memory Integration** – Works alongside Memory Extraction & Injection to enhance responses with stored knowledge.
+    
+### 4. Audio Agent
+  The audio agent is used to interact with elevanlabs to get model response to ava's voice as seemless experience. 
 
 #### Capabilities:
-  1. Hotel Search: Retrieves available hotels based on location, category (luxury, upscale, etc.), and dates.
-      - Example:
-         - Hilton Basel (Luxury) for 2024-04-22 to 2024-04-20.
-         - Marriott Zurich (Upscale) for 2024-04-14 to 2024-04-21.
-         - Hyatt Regency Basel (Upper Upscale) for 2024-04-02 to 2024-04-20.
-         - Hotel Booking: Users can book rooms at selected hotels, choosing their room preferences (e.g., single, double, suite) and finalizing their reservation.
-         - Hotel Update: Allows users to update existing reservations, such as changing check-in/check-out dates or room preferences.
-         - Hotel Cancellation: Facilitates hotel reservation cancellation, and provides users with refund or rebooking options.
-##### Tools:
-1. Search: Retrieves hotel availability from the database, considering the location, dates, and hotel category preferences.
-2. Book: Assists with hotel room reservations, confirming booking details.
-3. Update: Handles updates for existing hotel reservations, such as modifying dates or room types.
-4. Cancel: Manages cancellation of hotel bookings and processes refunds where applicable.
-
-### 5. Excursion Assistant
-  The Excursion Assistant allows users to explore and book excursions, activities, and tours at various locations.
+  - **Text-to-Speech Generation** – Uses **ElevenLabs.io** to generate realistic, human-like audio responses.
+  - **English-Language Support** – Enables Ava’s Bot to understand and respond in multiple languages, making interactions more accessible.
+  - **Seamless Workflow Integration** – Works with the Workflow Router to determine when to process audio inputs or generate speech responses.
+  - **Noise Reduction & Optimization** – Ensures clean and high-quality audio processing, even in noisy environments.
+    
+### 5. Conversation
+  Uses LLaMA, Gemma, and other LLMs to generate high-quality, human-like text responses.
 
 #### Capabilities:
-  1. Excursion Search: Retrieves details of available excursions based on location, type (landmark, history, art, etc.), and user preferences.
-       - Example:
-          - Basel Minster (landmark, history) in Basel.
-          - Kunstmuseum Basel (art, museum) in Basel.
-          - Zurich Old Town (history, architecture) in Zurich.
-          - Lucerne Chapel Bridge (landmark, history) in Lucerne.
-          - Excursion Booking: Enables users to book excursions or tours based on selected dates, locations, and activities.
-          - Excursion Update: Users can modify bookings for excursions, such as changing the date or activity details.
-          - Excursion Cancellation: Manages cancellation of excursion bookings, including refund options where necessary.
-##### Tools:
-  1. Search: Queries available excursions from the database based on user location and activity type.
-  2. Book: Facilitates booking of excursions, including details of the activity, dates, and special requests.
-  3. Update: Handles modifications to excursion bookings, including date changes or activity preferences.
-  4. Cancel: Allows users to cancel their excursion bookings and processes refund requests when applicable.
+  - **Advanced NLP Processing** – Uses LLaMA, Gemma, and other LLMs to generate high-quality, human-like text responses.
+  - **Context-Aware Responses** – Leverages Memory Extraction & Injection via Qdrant to maintain conversational flow and recall past interactions.
+  - **Multi-Turn Dialogue Handling** – Supports long-form conversations, allowing seamless, intelligent discussions over multiple messages.
 
-### General Tools:
-  1. Customer policy information
-       - Customer Policy Information typically refers to the set of rules and guidelines that govern interactions between a service provider (e.g., airline, hotel,
-          car rental company, excursion provider) and its customers.
-  3. TavilySearch
-       - TavilySearch seems to be a search service or tool that could be involved in searching for various travel-related offerings (flights, hotels,
-          car rentals, excursions). This could be part of an API or platform providing a seamless search experience for users.
-     
+### 6. summarize conversation 
+  This agents is used to summarize the previous memory and feed into model to get appropriate response.
+  
 ### Agent Architecture Diagrams
 
 #### Deep multi Agent Work Flow
