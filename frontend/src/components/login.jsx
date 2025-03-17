@@ -49,58 +49,66 @@ const LoginPage = () => {
   });
 
   return (
-    <Container maxWidth="xs" className="bg-white p-8 rounded-lg shadow-md" sx={{position: "relative", top: "120px", backgroundImage: 'url(../static/peakpx.png)'}}>
-      <Box>
-        <Typography variant="h5" align="center" gutterBottom className='text-white'>
-          Signup/Login
-        </Typography>
-        <form onSubmit={formik.handleSubmit} className="space-y-4">
-          {/* Name Input */}
-          <TextField
-             sx={{ input: { color: 'white'}}} 
-            label="Name"
-            variant="outlined"
-            fullWidth
-            name="name"
-            value={formik.values.name}
-            onChange={formik.handleChange}
-            onBlur={formik.handleBlur}
-            error={formik.touched.name && Boolean(formik.errors.name)}
-            helperText={formik.touched.name && formik.errors.name}
-            required
-          />
+    <>
+      <div className="flex gap-4 shadow-lg h-24">
+        <div className="pt-2" style={{height: "100px", width: "100px"}}>
+            <img src="../static/WhatsApp-Logo-PNG2.png"></img>
+        </div>
+        <div className="font-semibold mt-5 text-3xl">AI Agents</div>
+      </div>
+      <Container maxWidth="xs" className="bg-white p-8 rounded-lg shadow-md" sx={{position: "relative", top:"50px", backgroundImage: 'url(../static/peakpx.png)'}}>
+        <Box>
+          <Typography variant="h5" align="center" gutterBottom className='text-white'>
+            Signup/Login
+          </Typography>
+          <form onSubmit={formik.handleSubmit} className="space-y-4">
+            {/* Name Input */}
+            <TextField
+              sx={{ input: { color: 'white'}}} 
+              label="Name"
+              variant="outlined"
+              fullWidth
+              name="name"
+              value={formik.values.name}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              error={formik.touched.name && Boolean(formik.errors.name)}
+              helperText={formik.touched.name && formik.errors.name}
+              required
+            />
 
-          {/* Phone Number Input */}
-          <TextField
-            label="Phone Number"
-            variant="outlined"
-            sx={{ input: { color: 'white'}}}
-            fullWidth
-            name="phone"
-            value={formik.values.phone}
-            onChange={formik.handleChange}
-            onBlur={formik.handleBlur}
-            error={formik.touched.phone && Boolean(formik.errors.phone)}
-            helperText={formik.touched.phone && formik.errors.phone}
-            required
-            inputProps={{
-              maxLength: 10,
-            }}
-          />
+            {/* Phone Number Input */}
+            <TextField
+              label="Phone Number"
+              variant="outlined"
+              sx={{ input: { color: 'white'}}}
+              fullWidth
+              name="phone"
+              value={formik.values.phone}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              error={formik.touched.phone && Boolean(formik.errors.phone)}
+              helperText={formik.touched.phone && formik.errors.phone}
+              required
+              inputProps={{
+                maxLength: 10,
+              }}
+            />
 
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            fullWidth
-            className="mt-4"
-          >
-            Login
-          </Button>
-        </form>
-      </Box>
-    </Container>
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              fullWidth
+              className="mt-4"
+            >
+              Login
+            </Button>
+          </form>
+        </Box>
+      </Container>
+    </>
   );
 };
 

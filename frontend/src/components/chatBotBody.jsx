@@ -15,6 +15,7 @@ import Avatar from '@mui/material/Avatar';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Alert from '@mui/material/Alert';
+import Snackbar from "@mui/material/Snackbar";
 import {useNavigate} from "react-router-dom";
 import {stateContext} from "../App";
 
@@ -37,10 +38,8 @@ export default function ChatBotBody () {
     const hasRun = useRef(false);
     const [messages, setMessages] = useState([]);
     const [enableSend, setEnableSend] = useState(false);
-    const [embedUrl, setembedUrl] = useState("");
-    const [videoProcessed, setVideoProcessed] = useState(false);
     const [isDisabled, setIsDisabled] = useState(false);
-    const [isError, setIsError] = useState(false);
+    const [open, setOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const heightRef = useRef(null);
 
@@ -120,9 +119,20 @@ export default function ChatBotBody () {
         }
     }, [audioString, imageBytes]);
 
+    useEffect(() => {
+        setOpen(true); // Show alert on component mount
+    
+        const timer = setTimeout(() => {
+          setOpen(false); // Hide alert after 3 seconds
+        }, 3000);
+    
+        return () => clearTimeout(timer); // Cleanup on unmount
+    }, []);
+
     const logOut = () => {
         navigate("/login")
     }
+
     function blobToBase64(blob) {
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -165,7 +175,7 @@ export default function ChatBotBody () {
                 setAudioString(base64String); // Base64 audio string
               });
           }, 3000)
-      };
+    };
     //   async function blobToBase64(blob) {
     //     const arrayBuffer = await blob.arrayBuffer();
     //     const bytes = new Uint8Array(arrayBuffer);
@@ -175,6 +185,7 @@ export default function ChatBotBody () {
     //   }
     
     const submitRequest = () => {
+        setIsLoading(true)
         let userTextInput = "";
         if (!query && chatType == "audio"){
             setMessages((prevMsg)=>
@@ -287,12 +298,14 @@ export default function ChatBotBody () {
                         ])
                 }
             }
+            setIsLoading(false);
         });
     }
 
     const handleIconClick = () => {
         fileInputRef.current.click()
     }
+
     const handleFileChange = (event) => {
         const file = event.target.files[0]
         imagUrlRef.current = file;
@@ -305,6 +318,7 @@ export default function ChatBotBody () {
         }
         setChatType("image")
     }
+
     const handleSend = (event) => {
         if(event.target.value == ""){
             setEnableSend(false)
@@ -316,16 +330,21 @@ export default function ChatBotBody () {
 
     return (
         <>
-            {/* <Alert onClose={()=>{setIsError(false)}} severity="success">Youtube Url is not valid. Can you check the url</Alert> */}
+            {/* <Alert onClose={()=>{setOpen(false)}} severity="success">Youtube Url is not valid. Can you check the url</Alert> */}
+            <Snackbar className="w-56" anchorOrigin={{ vertical: "top", horizontal: "center" }} open={open} autoHideDuration={3000} onClose={() => setOpen(false)}>
+                <Alert onClose={() => setOpen(false)} severity="success">
+                    What's App Login SuccessFully
+                </Alert>
+            </Snackbar>
             <div className="">
-                <Stack direction="row" spacing={2} className="p-2 h-14 shadow-md rounded-md text-wrap font-mono font-extrabold text-lg text-white">
+                <Stack direction="row" spacing={2} className=" p-2 h-14 shadow-md rounded-md text-wrap font-mono font-extrabold text-lg text-white">
                     <Avatar alt="Avatar" src="https://t4.ftcdn.net/jpg/09/84/41/77/360_F_984417740_gYxjkB4WOCqAnZVvxLwVUPm7sEQK7hBQ.jpg" />
-                    <Stack direction="column">
+                    <Stack direction="column" className="mb-2">
                         <span>{userDet && userDet[1]}</span>    
                         <span>{userDet && userDet[2]}</span>
                     </Stack>   
                         <Tooltip title="Logout">
-                            <IconButton onClick={logOut} sx={{color:"grey", height: "32px", width: "35px", left: "1000px"}} className="relative border-1 bg-white rounded-lg cursor-pointer">
+                            <IconButton onClick={logOut} sx={{color:"#25d366", height: "32px", width: "35px", left: "1000px"}} className="relative border-1 bg-white rounded-lg cursor-pointer">
                                 <LogoutIcon />
                             </IconButton>
                         </Tooltip>
@@ -333,8 +352,7 @@ export default function ChatBotBody () {
                 <div className="rounded-md overflow-y-auto text-white shadow-lg" style={{height: "480px", width: "auto", 
                 backgroundImage: 'url(../static/peakpx.png)'}}>
                     <MessageList referance={heightRef} dataSource={messages}/>
-                </div> 
-                
+                </div>
                 <Formik
                     validateOnBlur={false}
                     validateOnChange={false}
@@ -354,16 +372,13 @@ export default function ChatBotBody () {
                                         {({ field }) => (
                                             <>
                                                 <div className="flex flex-row">
-                                                    <div style={{border: "2px solid grey"}} className="focus:cursor-pointer w-full cursor-text rounded-xl px-2.5 py-1">
-                                                    <div className="max-w-full flex-1">
-                                                        <div className="overflow-auto">
-                                                            <TextareaAutosize required onChangeCapture={handleSend} value={query} style={{color: "white"}} className="focus:outline-none block w-full border-0 bg-transparent px-0 py-2" autoFocus="" placeholder="Message">
-                                                            </TextareaAutosize>
+                                                    <div style={{border: "2px solid #25d366"}} className="focus:cursor-pointer w-full cursor-text rounded-xl px-2.5 py-1">
+                                                        <div className="max-w-full flex-1">
+                                                            <div className="overflow-auto">
+                                                                <TextareaAutosize disabled={isLoading} required onChangeCapture={handleSend} value={query} style={{color: "white"}} className="placeholder:text-green-500 focus:outline-none block w-full border-0 bg-transparent px-0 py-2" autoFocus="" placeholder="Message">
+                                                                </TextareaAutosize>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                        {/* <div className="flex min-h-[44px] items-center px-2" style={{color: "white"}}>
-                                                            
-                                                        </div> */}
                                                     </div>
                                                     <input
                                                         type="file"
@@ -373,24 +388,24 @@ export default function ChatBotBody () {
                                                         onChange={handleFileChange}
                                                     />
                                                     <Tooltip title="Upload Image">
-                                                        <IconButton onClick={handleIconClick} sx={{color:"grey", height: "32px", width: "35px"}} className="relative border-1 bg-white rounded-lg  right-20 top-3 cursor-pointer">
+                                                        <IconButton disabled={isLoading} onClick={handleIconClick} sx={{color:"#25d366", height: "32px", width: "35px", cursor: "pointer"}} className="relative border-1 bg-white rounded-lg  right-20 top-3 cursor-pointer">
                                                             <UploadFileIcon/> 
                                                         </IconButton>
                                                     </Tooltip>
                                                     <Tooltip title="Take photo">
-                                                        <IconButton sx={{color:"grey", height: "32px", width: "35px"}} className="relative border-1 bg-white rounded-lg right-20 top-3 cursor-pointer">
+                                                        <IconButton disabled={isLoading} sx={{color:"#25d366", height: "32px", width: "35px"}} className="relative border-1 bg-white rounded-lg right-20 top-3 cursor-pointer">
                                                             <PhotoCameraIcon/> 
                                                         </IconButton>
                                                     </Tooltip>
                                                     {enableSend && <Tooltip title="send">
-                                                        <IconButton onClick={submitRequest} sx={{background: "green", color: "black", height: "32px", width: "35px"}} className="relative border-1 rounded-lg right-16 top-3 cursor-pointer">
+                                                        <IconButton disabled={isLoading} onClick={submitRequest} sx={{background: "#25d366", color: "black", height: "32px", width: "35px"}} className="relative border-1 rounded-lg right-16 top-3 cursor-pointer">
                                                             <PlayArrowOutlinedIcon /> 
                                                         </IconButton>
                                                     </Tooltip>}
                                                     {!enableSend && 
                                                     <>
                                                         <Tooltip title={recording ? "Stop Recording" : "Start Recording"}>
-                                                            <IconButton onClick={recording ? stopRecording : startRecording} sx={{background: "green", color: "black", height: "32px", width: "35px"}} className="hover:bg-green-800 relative border-1 bg-white rounded-lg right-16 top-3 cursor-pointer">
+                                                            <IconButton disabled={isLoading} onClick={recording ? stopRecording : startRecording} sx={{background: "#25d366", color: "black", height: "32px", width: "35px"}} className="relative border-1 bg-white rounded-lg right-16 top-3 cursor-pointer">
                                                                 <KeyboardVoiceIcon/> 
                                                             </IconButton>
                                                         </Tooltip>
