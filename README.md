@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" />
   <img src="https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black" />
 
-  <h3>Your AI Co-pilot for What's App AI agents Chat Bot 🚀</h3>
+  <h3>Your Ava's Co-pilot for What's App AI agents Chat Bot 🚀</h3>
 
   <p align="center">
     <b> Memory Extraction Agent | Memory Injection Agent | Workflow Router Agent | Audio Agent | Image Agent | Summarize Conversation Agent </b>
@@ -45,19 +45,16 @@ Embrace the future of AI-driven conversations and experience the next evolution 
 ## Agents Features & Agent Types & Agent Informations
 
 ## Agent Capabilities
-  ### 1. Primary Assistant
-  The Primary Assistant is the central control hub that manages the conversation and directs queries to the appropriate agent based on user intent.
+  ### 1. Memory Extraction
+  The Memory Extraction is used to store chat information for both ava's and user chat to get seemless experiences.
 #### Capabilities:
-  - Request Routing: Recognizes user queries and forwards them to the relevant assistant (Flight, Car Rental, Hotel, or Excursion Assistant).
-  - Context Management: Keeps track of the ongoing conversation, ensuring that user queries are contextually linked and coherent even when switching between services.  
-  - Multi-Agent Coordination: Orchestrates communication across different agents to deliver a unified response. It integrates information from multiple agents (e.g., flight     and hotel) to create a seamless user experience.
-  - Intent Detection: Identifies the nature of the user’s request (e.g., booking a flight, reserving a hotel, renting a car) and triggers the appropriate agent.
-    Personalized Recommendations: Provides suggestions based on user preferences, past interactions, or stored information across all agents.
-##### Tools:
-  - Route Query: Directs user questions to the appropriate assistant based on the service requested (Flight, Hotel, Car, Excursion).
-  - Context Management: Tracks the conversation flow, manages the context, and keeps the user journey consistent.
+  - Understanding Context – Extracts key details from user conversations to maintain contextual awareness.
+  - Long-Term Memory – Utilizes Qdrant (vector database) to store & retain past conversations and enhance personalized interactions over time.
+  - Intelligent Prioritization – Identifies and classifies important information, ensuring relevant memories are stored while filtering out unnecessary data.
+  - Efficient Retrieval – Enables Ava’s Bot to remember user preferences, past queries, and ongoing tasks, leading to smoother, more natural conversations.
+  - Multi-Modal Memory Processing – Extracts meaningful insights from text, images, and audio, allowing Ava’s Bot to recall and reference past interactions across different formats.
 
-### 2. Flights Assistant
+### 2. Memory Injection
   The Flights Assistant is responsible for assisting users with flight bookings, availability checks, and flight-related queries.
 
 #### Capabilities:
