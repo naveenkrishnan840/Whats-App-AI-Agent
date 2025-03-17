@@ -100,36 +100,7 @@ Embrace the future of AI-driven conversations and experience the next evolution 
 ### Agent Architecture Diagrams
 
 #### Deep multi Agent Work Flow
-<img src="https://github.com/naveenkrishnan840/customer-support-bot/blob/main/graph.png"/>
-
-*Multi Agent's workflow for comprehensive booking and content generation*
-## Extract the aircraft information
-### Populate information to database
-  #### url https://storage.googleapis.com/benchmarks-artifacts/travel-db/travel2.sqlite
-  This url is need to extract the information to create & insert the records.
-  #### url https://storage.googleapis.com/benchmarks-artifacts/travel-db/swiss_faq.md
-  This url is need to extract the information to create the retriever information
-  
-## Architecture
-
-The system is built on a modern tech stack with three distinct agent types, each powered by:
-
-1. **State Management**
-   - LangGraph for maintaining agent message state
-   - Handles complex navigation flows and decision making
-   - Structured workflow management
-    
-2. **Content Processing**
-   - RAG (Retrieval Augmented Generation) pipeline
-   - Vector store integration for efficient information storage
-   - Automatic content structuring and organization
-
-3. **AI Decision Making**
-   - Multiple LLM integration (Gemini, deepseek)
-   - Context-aware navigation
-   - Self-review mechanisms
-   - Structured output generation
-
+<img src="https://github.com/naveenkrishnan840/Whats-App-AI-Agent/blob/main/backend/graph.png"/>
 
 ## Project Structure 
 ```
