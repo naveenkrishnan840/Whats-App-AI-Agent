@@ -4,13 +4,18 @@
   <!-- Backend -->
   <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" />
   <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
-  <img src="https://img.shields.io/badge/MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white" />
-  <img src="https://img.shields.io/badge/Faiss-4F5B93?style=for-the-badge&logo=faiss&logoColor=white" />
-  <img src="https://img.shields.io/badge/Google-4285F4?style=for-the-badge&logo=google&logoColor=white" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
+  <img src="https://img.shields.io/badge/Qdrant-FF6F00?style=for-the-badge&logo=qdrant&logoColor=white" />
+  <img src="https://img.shields.io/badge/Groq-FF4A00?style=for-the-badge&logo=groq&logoColor=white" />
   <img src="https://img.shields.io/badge/LangChain-121212?style=for-the-badge&logo=chainlink&logoColor=white" />
-  <img src="https://img.shields.io/badge/FlashrankRerank-4B9CD3?style=for-the-badge&logo=flash&logoColor=white" />
   <img src="https://img.shields.io/badge/LangGraph-FF6B6B?style=for-the-badge&logo=graph&logoColor=white" />
-  
+  <img src="https://img.shields.io/badge/OpenAI_Whisper-412991?style=for-the-badge&logo=openai&logoColor=white" />
+  <img src="https://img.shields.io/badge/ElevenLabs-000000?style=for-the-badge&logo=elevenlabs&logoColor=white" />
+  <img src="https://img.shields.io/badge/Together.AI-FF5733?style=for-the-badge&logo=togetherai&logoColor=white" />
+  <img src="https://img.shields.io/badge/LLaMA_Text_Model-1877F2?style=for-the-badge&logo=meta&logoColor=white" />
+  <img src="https://img.shields.io/badge/LLaMA_Vision_Model-1877F2?style=for-the-badge&logo=meta&logoColor=white" />
+  <img src="https://img.shields.io/badge/Gemma_Model-4285F4?style=for-the-badge&logo=google&logoColor=white" />
+
   <!-- Frontend -->
   <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" />
