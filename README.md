@@ -49,7 +49,7 @@ Embrace the future of AI-driven conversations and experience the next evolution 
   The Memory Extraction is used to store chat information for both ava's and user chat to get seemless experiences.
 #### Capabilities:
   - Understanding Context – Extracts key details from user conversations to maintain contextual awareness.
-  - Long-Term Memory – Utilizes Qdrant (vector database) to store & retain past conversations and enhance personalized interactions over time.
+  - Long-Term Memory – Utilizes Qdrant (vector database) to store current conversations and enhance personalized interactions over time.
   - Intelligent Prioritization – Identifies and classifies important information, ensuring relevant memories are stored while filtering out unnecessary data.
   - Efficient Retrieval – Enables Ava’s Bot to remember user preferences, past queries, and ongoing tasks, leading to smoother, more natural conversations.
   - Multi-Modal Memory Processing – Extracts meaningful insights from text, images, and audio, allowing Ava’s Bot to recall and reference past interactions across different formats.
@@ -58,14 +58,14 @@ Embrace the future of AI-driven conversations and experience the next evolution 
   The Flights Assistant is responsible for assisting users with flight bookings, availability checks, and flight-related queries.
 
 #### Capabilities:
-  - Flight Search: Retrieves flight details from the MySQL database and shows available flights.
-      Example:
-      - QR0051: BSL to BKK, Scheduled for 2025-03-09 at 15:08 (departure) and 20:13 (arrival).
-      - CA0065: GVA to DEN, Scheduled for 2025-03-11 at 15:33 (departure) and 20:13 (arrival).
-      - BA0022: SEZ to SHA, Scheduled for 2025-03-01 at 17:33 (departure) and 23:23 (arrival).
-      - Flight Booking: Allows users to book flights based on search results, entering user details (names, seats, preferences) into the system.
-      - Flight Update: Users can request changes (e.g., date changes, seat selection) to booked flights.
-      - Flight Cancellation: Enables users to cancel an existing flight reservation, either fully or partially.
+  - *Context-Aware Responses* – Retrieves relevant past conversations from SQLite (short-term memory) or Qdrant (long-term memory) to provide seamless, intelligent replies.
+  - Personalized Interactions – Injects stored knowledge into conversations, ensuring Ava’s Bot remembers user preferences, past questions, and important details.
+  - Multi-Modal Integration – Injects relevant text, image, and audio-based memory, allowing natural continuity across different conversation formats.
+  - Dynamic Memory Retrieval – Uses AI-driven logic to decide when and what memory should be injected, preventing unnecessary or outdated responses.
+  - Enhancing User Experience – Eliminates repetitive questioning by recalling past interactions, making conversations fluid and engaging.
+  - Workflow Optimization – Works alongside the Memory Extraction and Workflow Decision agents to ensure the right information is used at the right time.
+  - Adaptive Learning – Continuously updates and refines memory based on new user inputs, improving response accuracy over time.
+  - Efficient Query Processing – Uses vector search (Qdrant) to find the most relevant stored memories and integrate them into conversations in real-time.
 ##### Tools:
   - Search: Queries available flights from the database based on user input (e.g., departure date, source, and destination).
   - Book: Allows flight booking by processing user preferences and providing confirmation details.
