@@ -24,12 +24,16 @@
   <h3>Your AI Co-pilot for What's App AI agents Chat Bot 🚀</h3>
 
   <p align="center">
-    <b>Autonomous Flight Booking Agent | Hostel Booking Agent | Car Rental Agent | Excursion Booking Agent | Customer Policy Information Retrieval </b>
+    <b> Memory Extraction Agent | Memory Injection Agent | Workflow Router Agent | Audio Agent | Image Agent | Summarize Conversation Agent </b>
   </p>
 </div>
 
 # Overview
-The <b>Airbus Aircraft Customer Chat Bot </b> is an intelligent, multi-agent system that provides a seamless, efficient, and personalized experience for users booking flights, hotels, car rentals, and excursions. With its ability to access real-time data via MySQL, interact across multiple service categories, and use AI-powered NLP for context-driven conversations, this bot is a powerful tool for both customers and businesses. By leveraging advanced technologies, the bot helps streamline complex travel arrangements and delivers an exceptional customer experience.
+<b>Ava’s Bot</b> is a smart, multi-agent system designed to provide a seamless, efficient, and personalized experience for users interacting via WhatsApp. With the ability to handle text, images, and audio, Ava’s Bot leverages AI-powered NLP, memory management, and multimodal processing to deliver context-aware, human-like conversations.
+
+By integrating SQLite for short-term memory, Qdrant for long-term memory, and real-time workflow automation, Ava’s Bot ensures intelligent decision-making while enhancing user interactions. The bot can process text-to-text, text-to-image, image-to-text, text-to-audio, and audio-to-text requests, making it a powerful tool for advanced conversational AI applications.
+
+By leveraging cutting-edge AI models, Ava’s Bot streamlines complex interactions, making AI-driven conversations smarter, more interactive, and highly personalized. 🚀
 
 # Motivation
 Efficiency meets innovation. With the power of intelligent technology, you can navigate the complexities of travel with ease and confidence. The Airbus Aircraft Customer Chat Bot doesn’t just streamline your journey—it transforms it, offering you a personalized, seamless experience that lets you focus on what truly matters: enjoying the adventure ahead. Whether it’s booking flights, hotels, or planning exciting excursions, let technology be your trusted companion in making every step of your travel smarter and more enjoyable. Embrace the future of travel and make every moment count.
