@@ -100,36 +100,7 @@ Embrace the future of AI-driven conversations and experience the next evolution 
 ### Agent Architecture Diagrams
 
 #### Deep multi Agent Work Flow
-<img src="https://github.com/naveenkrishnan840/customer-support-bot/blob/main/graph.png"/>
-
-*Multi Agent's workflow for comprehensive booking and content generation*
-## Extract the aircraft information
-### Populate information to database
-  #### url https://storage.googleapis.com/benchmarks-artifacts/travel-db/travel2.sqlite
-  This url is need to extract the information to create & insert the records.
-  #### url https://storage.googleapis.com/benchmarks-artifacts/travel-db/swiss_faq.md
-  This url is need to extract the information to create the retriever information
-  
-## Architecture
-
-The system is built on a modern tech stack with three distinct agent types, each powered by:
-
-1. **State Management**
-   - LangGraph for maintaining agent message state
-   - Handles complex navigation flows and decision making
-   - Structured workflow management
-    
-2. **Content Processing**
-   - RAG (Retrieval Augmented Generation) pipeline
-   - Vector store integration for efficient information storage
-   - Automatic content structuring and organization
-
-3. **AI Decision Making**
-   - Multiple LLM integration (Gemini, deepseek)
-   - Context-aware navigation
-   - Self-review mechanisms
-   - Structured output generation
-
+<img src="https://github.com/naveenkrishnan840/Whats-App-AI-Agent/blob/main/backend/graph.png"/>
 
 ## Project Structure 
 ```
@@ -168,8 +139,8 @@ ai-hedge-fund/
 
 1. Clone the repository
    ```bash
-   git clone https://github.com/naveenkrishnan840/customer-support-bot.git
-   cd customer-support-bot
+   git clone https://github.com/naveenkrishnan840/Whats-App-AI-Agent.git
+   cd Whats-App-AI-Agent
    cd backend
    ```
 
@@ -210,17 +181,25 @@ ai-hedge-fund/
 
 6. Set up environment variables in `.env`:
    ```bash
-    GOOGLE_API_KEY="Your api key"
-    TAVILY_API_KEY="Your api key"
-    COHERE_API_KEY="Your api key"
-    MYSQL_HOST="Your host url"
-    MYSQL_USER="Your user"
-    MYSQL_PASSWORD="your password"
-    MYSQL_DB="your database name"
-    LANGCHAIN_TRACING_V2=true
-    LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
-    LANGCHAIN_API_KEY="your api key"
-    LANGCHAIN_PROJECT="your project name"
+   GROQ_API_KEY=Your Api key
+   ELEVENLABS_API_KEY=Your Api key
+   ELEVENLABS_VOICE_ID=voice Id
+   TOGETHER_API_KEY=Your Api key
+   QDRANT_API_KEY=Your Api key
+   QDRANT_URL=Your Url
+   QDRANT_PORT=6333
+   TEXT_MODEL_NAME=llama-3.3-70b-versatile
+   SMALL_TEXT_MODEL_NAME=gemma2-9b-it
+   STT_MODEL_NAME=whisper-large-v3-turbo
+   TTS_MODEL_NAME=eleven_flash_v2_5
+   TTI_MODEL_NAME=black-forest-labs/FLUX.1-schnell-Free
+   ITT_MODEL_NAME=llama-3.2-90b-vision-preview
+   MEMORY_TOP_K=5
+   ROUTER_MESSAGES_TO_ANALYZE=5
+   TOTAL_MESSAGES_SUMMARY_TRIGGER=20
+   TOTAL_MESSAGES_AFTER_SUMMARY=5
+   SHORT_TERM_MEMORY_DB_PATH=your sqlite db path
+
    ```
 
 7. Run the backend:
