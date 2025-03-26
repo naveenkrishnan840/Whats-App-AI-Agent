@@ -416,7 +416,8 @@ export default function ChatBotBody () {
                                         )}
                                     </Field>
                                 </div>
-                            </Form>)}
+                            </Form>
+                        )}
                 </Formik>
             </div>
         </>
