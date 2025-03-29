@@ -12,7 +12,7 @@ with sqlite3.connect(database="chat_message.db") as conn:
             phone_no INT NOT NULL
         );""")
     print("user_login table is created.")
-    cursor.execute("drop table if exists whatapp_chat_message.")
+    cursor.execute("drop table if exists whatapp_chat_message")
     print("whatapp_chat_message table is dropped if it is there.")
     cursor.execute(
         """CREATE TABLE IF NOT EXISTS whatapp_chat_message (
