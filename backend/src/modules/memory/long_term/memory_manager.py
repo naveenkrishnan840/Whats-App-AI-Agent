@@ -8,8 +8,8 @@ from langchain_core.messages import BaseMessage
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
-from backend.src.core.prompts import MEMORY_ANALYSIS_PROMPT
-from backend.src.modules.memory.long_term.vector_store import get_vector_store
+from src.core.prompts import MEMORY_ANALYSIS_PROMPT
+from src.modules.memory.long_term.vector_store import get_vector_store
 
 
 class MemoryAnalysis(BaseModel):

@@ -6,7 +6,7 @@ from typing import Optional, Union
 import logging
 from groq import Groq
 
-from backend.src.settings import settings
+# from src.settings import settings
 # from backend.src.core.exceptions import ImageToTextError
 
 

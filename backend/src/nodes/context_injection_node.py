@@ -1,5 +1,5 @@
-from backend.src.graph_state import AIAgentState
-from backend.src.modules.schedules.context_generation import ScheduleContextGenerator
+from src.graph_state import AIAgentState
+from src.modules.schedules.context_generation import ScheduleContextGenerator
 
 
 def context_injection_node(state: AIAgentState):

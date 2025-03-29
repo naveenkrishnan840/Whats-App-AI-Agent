@@ -1,9 +1,9 @@
 from langchain_core.runnables import ensure_config
 from langchain_core.messages import AIMessage
 
-from backend.src.graph_state import AIAgentState
-from backend.src.modules.schedules.context_generation import ScheduleContextGenerator
-from backend.src.utils.chains import get_character_response_chain
+from src.graph_state import AIAgentState
+from src.modules.schedules.context_generation import ScheduleContextGenerator
+from src.utils.chains import get_character_response_chain
 
 
 async def conversation_node(state: AIAgentState):

@@ -7,8 +7,8 @@ from logging import getLogger
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate, MessagesPlaceholder
 
-from backend.src.settings import settings
-from backend.src.core.prompts import IMAGE_SCENARIO_PROMPT, IMAGE_ENHANCEMENT_PROMPT
+# from src.settings import settings
+from src.core.prompts import IMAGE_SCENARIO_PROMPT, IMAGE_ENHANCEMENT_PROMPT
 
 
 class ScenarioPrompt(BaseModel):

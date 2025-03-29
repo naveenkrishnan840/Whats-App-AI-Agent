@@ -3,7 +3,7 @@ import tempfile
 from typing_extensions import Optional
 from groq import Groq
 
-from backend.src.settings import settings
+# from backend.src.settings import settings
 
 
 class SpeechToText:

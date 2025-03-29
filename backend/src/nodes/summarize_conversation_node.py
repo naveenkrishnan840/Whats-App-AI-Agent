@@ -2,9 +2,9 @@ import os
 
 from langchain_core.messages import HumanMessage, RemoveMessage
 
-from backend.src.graph_state import AIAgentState
-from backend.src.utils.chains import get_chat_model
-from backend.src.settings import settings
+from src.graph_state import AIAgentState
+from src.utils.chains import get_chat_model
+# from src.settings import settings
 
 
 async def summarize_conversation_node(state: AIAgentState):

@@ -7,7 +7,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from datetime import datetime
 
-from backend.src.settings import settings
+# from backend.src.settings import settings
 
 
 @dataclasses.dataclass

@@ -2,7 +2,7 @@ from elevenlabs import ElevenLabs, Voice, VoiceSettings
 import os
 from typing_extensions import Optional
 
-from backend.src.settings import settings
+# from backend.src.settings import settings
 
 
 class TextToSpeech:

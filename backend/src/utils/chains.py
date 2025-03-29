@@ -6,8 +6,8 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 import re
 
-from backend.src.core.prompts import CHARACTER_CARD_PROMPT, ROUTER_PROMPT
-from backend.src.settings import settings
+from src.core.prompts import CHARACTER_CARD_PROMPT, ROUTER_PROMPT
+# from backend.src.settings import settings
 
 
 def remove_asterisk_content(text: str) -> str:

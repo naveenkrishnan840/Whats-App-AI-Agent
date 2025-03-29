@@ -1,9 +1,9 @@
 from langchain_core.runnables import ensure_config
 
-from backend.src.graph_state import AIAgentState
-from backend.src.modules.schedules.context_generation import ScheduleContextGenerator
-from backend.src.modules.speechs.text_to_speech import get_text_to_speech_module
-from backend.src.utils.chains import get_character_response_chain
+from src.graph_state import AIAgentState
+from src.modules.schedules.context_generation import ScheduleContextGenerator
+from src.modules.speechs.text_to_speech import get_text_to_speech_module
+from src.utils.chains import get_character_response_chain
 
 
 async def audio_node(state: AIAgentState):

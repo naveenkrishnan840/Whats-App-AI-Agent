@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, Optional
 
-from backend.src.core.schedules import (
+from src.core.schedules import (
     MONDAY_SCHEDULE,
     TUESDAY_SCHEDULE,
     WEDNESDAY_SCHEDULE,

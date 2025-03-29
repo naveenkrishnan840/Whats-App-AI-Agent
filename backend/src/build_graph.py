@@ -1,16 +1,16 @@
 from langgraph.graph import StateGraph, START, END
 from functools import lru_cache
 
-from backend.src.nodes.memory_extraction_node import memory_extraction_node
-from backend.src.nodes.memory_injection_node import memory_injection_node
-from backend.src.nodes.context_injection_node import context_injection_node
-from backend.src.nodes.router_node import router_node
-from backend.src.nodes.audio_node import audio_node
-from backend.src.nodes.image_node import image_node
-from backend.src.nodes.conversation_node import conversation_node
-from backend.src.nodes.summarize_conversation_node import summarize_conversation_node
-from backend.src.graph_state import AIAgentState
-from backend.src.edges.edges import should_summarize_conversation, select_workflow
+from src.nodes.memory_extraction_node import memory_extraction_node
+from src.nodes.memory_injection_node import memory_injection_node
+from src.nodes.context_injection_node import context_injection_node
+from src.nodes.router_node import router_node
+from src.nodes.audio_node import audio_node
+from src.nodes.image_node import image_node
+from src.nodes.conversation_node import conversation_node
+from src.nodes.summarize_conversation_node import summarize_conversation_node
+from src.graph_state import AIAgentState
+from src.edges.edges import should_summarize_conversation, select_workflow
 
 
 @lru_cache(maxsize=1)

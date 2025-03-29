@@ -12,11 +12,11 @@ from langgraph.checkpoint.duckdb.aio import AsyncDuckDBSaver
 from langchain_core.messages import HumanMessage
 from logging import getLogger
 
-from backend.src.modules.speechs.speech_to_text import SpeechToText
-from backend.src.modules.image.image_to_text import ImageToText
-from backend.src.settings import settings
-from backend.src import graph_builder
-from backend.src.request_validate import SignUpLogin, ChatInput
+from src.modules.speechs.speech_to_text import SpeechToText
+from src.modules.image.image_to_text import ImageToText
+# from src.settings import settings
+from src import graph_builder
+from src.request_validate import SignUpLogin, ChatInput
 
 app = FastAPI(title="What's App AI Agent")
 

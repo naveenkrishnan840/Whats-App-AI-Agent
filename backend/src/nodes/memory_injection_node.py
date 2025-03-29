@@ -1,5 +1,5 @@
-from backend.src.modules.memory.long_term.memory_manager import get_memory_store
-from backend.src.graph_state import AIAgentState
+from src.modules.memory.long_term.memory_manager import get_memory_store
+from src.graph_state import AIAgentState
 
 
 def memory_injection_node(state: AIAgentState):
