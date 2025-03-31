@@ -331,7 +331,7 @@ export default function ChatBotBody () {
     return (
         <>
             {/* <Alert onClose={()=>{setOpen(false)}} severity="success">Youtube Url is not valid. Can you check the url</Alert> */}
-            <Snackbar className="w-56" anchorOrigin={{ vertical: "top", horizontal: "center" }} open={open} autoHideDuration={3000} onClose={() => setOpen(false)}>
+            <Snackbar className="w-full" anchorOrigin={{ vertical: "top", horizontal: "center" }} open={open} autoHideDuration={3000} onClose={() => setOpen(false)}>
                 <Alert onClose={() => setOpen(false)} severity="success">
                     What's App Login SuccessFully
                 </Alert>

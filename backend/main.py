@@ -84,7 +84,7 @@ async def whatapp_handler(request: Request, chat_input: ChatInput):
             cursor.execute(f'insert into whatapp_chat_message (blob_data, text_data, chat_type, msg_type, chat_time, '
                            f'user_id) '
                            f'values("{message.user_text_input if message.chat_type in ["audio", "image"] else ""}", '
-                           f'{message.user_text_input if message.chat_type == "text" else ""}, '
+                           f"{message.user_text_input if message.chat_type == 'text' else ''}, "
                            f'"User", "{message.chat_type}", "{datetime.now()}", '
                            f'"{1}")')
         if message.chat_type == "audio":
