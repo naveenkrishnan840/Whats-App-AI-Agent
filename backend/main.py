@@ -24,7 +24,7 @@ logger = getLogger(__name__)
 
 api_router = APIRouter()
 
-database = "backend/chat_message.db"
+database = "chat_message.db"
 
 load_dotenv()
 # Declare the Global Instance
