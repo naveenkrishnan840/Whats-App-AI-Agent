@@ -21,6 +21,7 @@ import {stateContext} from "../App";
 
 
 export default function ChatBotBody () {
+    const [size, setSize] = useState(window.innerWidth);
     const {userDet} = useContext(stateContext);
     const [chatType, setChatType] = useState("");
     const [imageBytes, setImageBytes] = useState("");
@@ -43,6 +44,16 @@ export default function ChatBotBody () {
     const [isLoading, setIsLoading] = useState(false);
     const heightRef = useRef(null);
 
+    useEffect(() => {
+        const resizeObserver = new ResizeObserver(() => {
+            setSize(window.innerWidth);
+        });
+
+        resizeObserver.observe(document.body);
+
+        return () => resizeObserver.disconnect();
+    }, []);
+    
     useEffect(() => {
         if (hasRun.current) return
         hasRun.current = true
@@ -299,6 +310,7 @@ export default function ChatBotBody () {
                 }
             }
             setIsLoading(false);
+            setEnableSend(false);
         });
     }
 
