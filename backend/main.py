@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import httpx
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langgraph.checkpoint.duckdb.aio import AsyncDuckDBSaver
+# from langgraph.checkpoint.duckdb.aio import AsyncDuckDBSaver
 from langchain_core.messages import HumanMessage
 from logging import getLogger
 
