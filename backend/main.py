@@ -128,7 +128,7 @@ async def whatapp_handler(request: Request, chat_input: ChatInput):
             with sqlite3.connect(database=database) as conn:
                 cursor = conn.cursor()
                 cursor.execute(f'insert into whatapp_chat_message (blob_data, text_data, chat_type, msg_type, '
-                               f'chat_time, user_id) values("{byts_str_data}", {response_message}, "Bot", '
+                               f'chat_time, user_id) values("{byts_str_data}", "{response_message}", "Bot", '
                                f'"{chat_type}", "{datetime.now()}", "{1}")')
             return HTTPException(detail={"message": response_message, "bytes_data": byts_str_data,
                                          "workflow": ("text" if workflow == "conversation" else workflow)},

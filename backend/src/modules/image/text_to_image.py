@@ -41,14 +41,15 @@ class TextToImage:
             raise ValueError("Prompt cannot be empty")
 
         try:
-            response = self._together_client.images.generate(prompt=prompt, model=os.getenv("TTI_MODEL_NAME"),
-                                                             width=1024, height=768, steps=4, n=1,
-                                                             response_format="b64_json")
+            response = self.together_client.images.generate(prompt=prompt, model=os.getenv("TTI_MODEL_NAME"),
+                                                            width=1024, height=768, steps=4, n=1,
+                                                            response_format="b64_json")
 
             image_data = base64.b64decode(response.data[0].b64_json)
 
             if output_path:
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                [os.remove(f"generated_images/{file}") for file in os.listdir("generated_images")]
                 with open(file=output_path, mode="wb") as image:
                     image.write(image_data)
             self.logger.info(f"Image saved to {output_path}")
