@@ -21,7 +21,7 @@ class MemoryAnalysis(BaseModel):
 
 class MemoryManager:
     def __init__(self):
-        self.llm = ChatGroq(name=os.getenv("SMALL_TEXT_MODEL_NAME"),
+        self.llm = ChatGroq(model=os.getenv("SMALL_TEXT_MODEL_NAME"),
                             temperature=0.2, max_retries=2).with_structured_output(MemoryAnalysis)
         self.logger = logging.getLogger(__name__)
         self.vector_store = get_vector_store()
