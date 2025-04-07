@@ -104,33 +104,43 @@ Embrace the future of AI-driven conversations and experience the next evolution 
 
 ## Project Structure 
 ```
-ai-hedge-fund/
-├── src/
-│   ├── assistant/                           # Agent definitions and workflow
-│   │   ├── __init__.py                      # init file
-│   │   ├── primary_assistant.py             # primary assistant agent
-│   │   ├── hotel_assistant.py               # hotel_assistant agent
-│   │   ├── flight_assistant.py              # flight assistant agent
-│   │   ├── car_rental_assistant.py          # Car rental agent
-│   │   ├── excursion_assistant.py           # Car rental agent
-|   ├── database                             # To store the vector files
-│   ├── tools/                               # Agent tools
-│   │   ├── __init__.py                      # init file
-|   |   ├── car_rental.py                    # To handle the search, update, cancel things
-|   |   ├── flights.py                       # To handle the search, update, cancel things
-|   |   ├── hotels.py                        # To handle the search, update, cancel things
-|   |   ├── excursions.py                    # To handle the search, update, cancel things
-|   |   ├── lookup_policies_search_tool.py   # To retrieve the policy content
-│   ├── build_graph.py                       # building the graph
-|   ├── question.py
-|   ├── request_validate.py                  # request validation
-|   ├── utilities.py 
-│────── .env # If you want
-│────── data_insertion.py # customer related records insert to mysql db
-│────── pyproject.toml # create virtual env using poetry
-│────── main.py # Main entry point
-├── pyproject.toml
-├── ...
+whats-app-AI-Agent/
+├── backend/
+│   ├── src/
+|   |    ├── core                          # Agent definitions and workflow
+|   |    |    |────── prompt.py
+|   |    |    |────── schedules.py
+|   |    ├── edges
+|   |    |    |──────  edges.py
+|   |    ├── modules
+|   |    |    |─── image
+|   |    |    |      |─── image_to_text.py
+|   |    |    |      |─── text_to_image.py
+|   |    |    |─── memory
+|   |    |    |      |─── long term
+|   |    |    |      |     |─── memory_manager.py
+|   |    |    |      |     |─── vector_store.py
+|   |    |    |      |─── schedules
+|   |    |    |      |     |─── context_generation.py
+|   |    |    |      |─── speechs
+|   |    |    |      |     |─── speech_to_text.py
+|   |    |    |      |     |─── text_to_speech.py
+|   |    |─── nodes
+|   |    |    |─── __init__.py
+|   |    |    |─── audio_node.py
+|   |    |    |─── context_injection_node.py
+|   |    |    |─── coversation_node.py
+|   |    |    |─── image_node.py
+|   |    |    |─── memory_extraction_node.py
+|   |    |    |─── memory_injection_node.py
+|   |    |    |─── router_ndoe.py
+|   |    |    |─── summarize_conversion_ndoe.py
+|   |    |─── utils
+|   |    |    |─── chains.py
+|   |─── create_table.py
+|   |─── main.py # Main entry point
+|   |─── pyproject.toml # create virtual env using poetry   
+
 ```
 
 ## Setup Instructions
