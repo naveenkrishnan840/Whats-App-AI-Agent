@@ -55,7 +55,7 @@ Embrace the future of AI-driven conversations and experience the next evolution 
   - **Multi-Modal Memory Processing** – Extracts meaningful insights from text, images, and audio, allowing Ava’s Bot to recall and reference past interactions across different formats.
 
 ### 2. Memory Injection
-  The Flights Assistant is responsible for assisting users with flight bookings, availability checks, and flight-related queries.
+  Memory injection is used to get relevant past memories for related user feed into Ava's.
 
 #### Capabilities:
   - **Context-Aware Responses** – Retrieves relevant past conversations from SQLite (short-term memory) or Qdrant (long-term memory) to provide seamless, intelligent replies.
