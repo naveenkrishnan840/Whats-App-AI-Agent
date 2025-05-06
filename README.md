@@ -15,6 +15,9 @@
   <img src="https://img.shields.io/badge/LLaMA_Text_Model-1877F2?style=for-the-badge&logo=meta&logoColor=white" />
   <img src="https://img.shields.io/badge/LLaMA_Vision_Model-1877F2?style=for-the-badge&logo=meta&logoColor=white" />
   <img src="https://img.shields.io/badge/Gemma_Model-4285F4?style=for-the-badge&logo=google&logoColor=white" />
+  <img src="https://img.shields.io/badge/AWS_EC2-g4dn.xlarge-orange?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS EC2 g4dn.xlarge" />
+  <img src="https://img.shields.io/badge/NVIDIA-T4_16GB-76B900?style=for-the-badge&logo=nvidia&logoColor=white" alt="NVIDIA T4 16GB" />
+  <img src="https://img.shields.io/badge/4_vCPUs_&_16_GiB_RAM-blue?style=for-the-badge" alt="4 vCPUs and 16 GiB RAM" />
 
   <!-- Frontend -->
   <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" />
