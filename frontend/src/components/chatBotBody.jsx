@@ -80,7 +80,7 @@ export default function ChatBotBody () {
                     } else if (value[4] == "text") {
                         setMessages((prevMsg)=>
                             [...prevMsg, {
-                                position: value[2] == "Bot" ? "left" :"right",
+                                position: value[3] == "Bot" ? "left" :"right",
                                 type: value[4],
                                 title: value[3],
                                 text: value[2],
@@ -99,7 +99,7 @@ export default function ChatBotBody () {
                                 title: value[3],
                                 text: value[2],
                                 focus: true,
-                                avatar: value[2] == "Bot" ? "https://t4.ftcdn.net/jpg/02/11/61/95/360_F_211619589_fnRk5LeZohVD1hWInMAQkWzAdyVlS5ox.jpg": "https://t4.ftcdn.net/jpg/02/11/61/95/360_F_211619589_fnRk5LeZohVD1hWInMAQkWzAdyVlS5ox.jpg",
+                                avatar: value[3] == "Bot" ? "https://t4.ftcdn.net/jpg/02/11/61/95/360_F_211619589_fnRk5LeZohVD1hWInMAQkWzAdyVlS5ox.jpg": "https://t4.ftcdn.net/jpg/02/11/61/95/360_F_211619589_fnRk5LeZohVD1hWInMAQkWzAdyVlS5ox.jpg",
                                 className: "text-black max-h-screen font-semibold font-mono",
                                 date: new Date(Date.parse(value[5])),
                                 statusTitle: "Received",
