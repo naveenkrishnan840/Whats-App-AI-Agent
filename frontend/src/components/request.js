@@ -7,7 +7,7 @@ export const RequestService = (path, data) => {
         header_data["Authorization"] = `Bearer ${localStorage.getItem("token")}`
     }
     var body = JSON.stringify(data) 
-    var path = `http://65.1.139.145:8085/${path}`
+    var path = `http://3.111.243.223:8085/${path}`
     return fetch(path, {
         method: "POST",
         headers: header_data,
